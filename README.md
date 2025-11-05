@@ -42,8 +42,10 @@
 **터미널 1**
 ```bash
 $ go run server_rlwe.go
+```
 
 **터미널 2**
 
 ```bash
 $ go run server_rlwe.go
+```
