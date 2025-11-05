@@ -22,30 +22,34 @@
 3. 실험
 
 
-## RLWE 버전
-
 ### 설명
 - 센서 `y`, 제어입력 `u`, 컨트롤러 상태 `x`를 **RLWE** 암호문으로 처리합니다.
 - 컨트롤러는 오프라인에서 스케일/패킹을 준비한 뒤, 루프에서 다음 순서를 반복합니다:  
   1) TCP로 `y=[theta, alpha]` 수신  
   2) `y` 양자화·암호화  
-  3) 암호 상태 `x`로 **`u = Hx`** 계산  
+  3) 암호 제어 연산
   4) `u` 복호화  
   5) `u`(스칼라) 한 줄 송신  
   6) `u` 재암호화  
-  7) **`x ← Fx + Gy + Ru`** 상태 업데이트
+  7) x ← Fx + Gy + Ru 상태 업데이트 or x ← Hu * u_seq + Hy * y_seq 
 - 통신 포맷: 클라이언트가 `"theta,alpha\n"` 전송 → 서버는 `"u\n"`(스칼라) 응답  
 - 기본 포트: `127.0.0.1:9000`
+
+
 
 ### Usage
 
 **터미널 1**
 ```bash
-$ go run server_rlwe.go
+$ go run ARX_server.go
+or
+$ go run RGSW_server.go
 ```
 
 **터미널 2**
 
 ```bash
-$ go run server_rlwe.go
+$ python sensor_actuator.py
 ```
+
+
