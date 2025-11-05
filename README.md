@@ -1,6 +1,6 @@
 # Qube-Servo 3 — Encrypted Control
 
-전체 틀:
+### 전체 틀
 <플랜트 = 실험장치 = python code> :  
 장치로 엔코더 각도 2개 측정 - tcp 통신을 통해 y 송신 - tcp 통신을 통해 u 수신 - 모터에 전압 인가
 
@@ -11,7 +11,7 @@ tcp로 전달받은 float 데이터 수신 - { 암호화 - 암호 제어 연산 
 {} 과정에 걸리는 시간을 플랜트의 샘플링 주기로 미리 설정
 
 
-# CDSL 라이브러리 기반 Go code
+### CDSL 라이브러리 기반 Go code
 
 해야 할 일:
 
