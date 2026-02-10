@@ -1,0 +1,9 @@
+﻿-IC:\Users\publi\Desktop\퀀서모델찾기\qs3
+-IC:\Users\publi\Desktop\퀀서모델찾기\qs3\qs3_pen_ss_model_quarc_win64
+-I"C:\Program Files\MATLAB\R2024b\extern\include"
+-I"C:\Program Files\MATLAB\R2024b\simulink\include"
+-I"C:\Program Files\MATLAB\R2024b\rtw\c\src"
+-I"C:\Program Files\MATLAB\R2024b\rtw\c\src\ext_mode\common"
+-I"C:\Program Files\MATLAB\R2024b\toolbox\coder\rtiostream\src"
+-I"C:\Program Files\MATLAB\R2024b\toolbox\coder\rtiostream\src\utils"
+-I"C:\Program Files\Quanser\QUARC\include"
