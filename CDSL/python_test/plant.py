@@ -47,9 +47,9 @@ N_INPUT = 1 # m (입력 1개)
 N_OUTPUT = 2 # p (출력 2개)
 
 # Quantization Parameters
-VAL_S = 1.0/100.0
-VAL_L = 1.0/100000.0
-VAL_R = 1.0/100.0
+VAL_S = 1.0/1000.0
+VAL_L = 1.0/10000.0
+VAL_R = 1.0/1000.0
 
 # System Matrices
 A = [
@@ -60,7 +60,7 @@ A = [
 ]
 B = [[0.0100], [0.0099], [1.0043], [1.0001]]
 C = [[1.0000, 0.0000, 0.0000, 0.0000], [0.0000, 1.0000, 0.0000, 0.0000]]
-xp_ini = [10, 10, 0.0, 0.0]
+xp_ini = [0, 0.5, 0.0, 0.0]
 
 def mat_vec_mult(M, v):
     return [sum(M[i][j]*v[j] for j in range(len(v))) for i in range(len(M))]
