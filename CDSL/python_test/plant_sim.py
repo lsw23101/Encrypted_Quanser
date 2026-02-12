@@ -195,7 +195,7 @@ def run_plant_simulation():
                 # -----------------------------------------------------
                 u = decrypt_helper(u_enc_bytes, N_INPUT) # Returns list [u1]
                 if u is None: break
-
+                print(i, u)
                 # -----------------------------------------------------
                 # 4. Pack [y | u] -> Encrypt -> Send
                 # -----------------------------------------------------
