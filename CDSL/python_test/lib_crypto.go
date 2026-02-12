@@ -6,7 +6,7 @@ package main
 import "C"
 
 // 암호 라이브러리를 파이썬엣서 사용
-// go build -o client_crypto.so -buildmode=c-shared lib.go
+// go build -o client_crypto.so -buildmode=c-shared lib_crypto.go
 
 import (
 	"math"
@@ -47,7 +47,7 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	// 2. 파라미터 로드 (Lattigo 파라미터는 고정이라고 가정)
 	var err error
 	params, err = rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
+		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
 	})
 	if err != nil {
 		panic(err)

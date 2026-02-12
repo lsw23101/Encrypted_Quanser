@@ -24,14 +24,14 @@ func main() {
 	// 1. 파라미터 설정
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    12,
-		LogQ:    []int{56},
-		LogP:    []int{51},
+		LogQ:    []int{60},
+		LogP:    []int{60},
 		NTTFlag: true,
 	})
 
 	// Quantization parameters
 	s := 1 / 1000.0
-	L := 1 / 10000.0
+	L := 1 / 1000000.0
 	r := 1 / 1000.0
 	fmt.Printf("Params: LogN=%d, 1/r=%.1f, 1/s=%.1f, 1/L=%.1f\n", params.LogN(), 1/r, 1/s, 1/L)
 
@@ -44,22 +44,40 @@ func main() {
 		{0.0000, -0.0000, 1.0000, 2.0000},
 	}
 
-	G := [][]float64{
-		{1.0000, -2.5334},
-		{0.0000, -9.9067},
-		{-0.0000, -5.2223},
-		{0.0000, 4.9602},
+	// G := [][]float64{
+	// 	{1.0000, -1.419},
+	// 	{0.0000, -11.490},
+	// 	{-0.0000, -5.942},
+	// 	{0.0000, 5.723},
+	// }
+
+	// H := [][]float64{
+	// 	{69.691, -5.260, 152.481, 142.539},
+	// }
+
+	// R := [][]float64{
+	// 	{0.004},
+	// 	{-1.422},
+	// 	{-0.718},
+	// 	{0.702},
+	// }
+
+	GBar := [][]float64{
+		{1000, -1419},
+		{0, -11490},
+		{0, -5942},
+		{0, 5723},
 	}
 
-	H := [][]float64{
-		{32.6937, -12.3145, 69.0290, 44.5420},
+	HBar := [][]float64{
+		{69691, -5260, 152481, 142539},
 	}
 
-	R := [][]float64{
-		{0.0173},
-		{-1.0184},
-		{-0.5241},
-		{0.4951},
+	RBar := [][]float64{
+		{4},
+		{-1422},
+		{-718},
+		{702},
 	}
 
 	// Initial State (4x1) - plant.py의 초기값과 맞춰줌 (예: 각도만 0.1)
@@ -100,10 +118,10 @@ func main() {
 	// 4. 행렬 암호화
 	fmt.Println(">> Encrypting Matrices (This may take a while)...")
 
-	// Scaling Matrices (여기 utils는 CDSL 라이브러리)
-	GBar := utils.ScalMatMult(1/s, G)
-	HBar := utils.ScalMatMult(1/s, H)
-	RBar := utils.ScalMatMult(1/s, R)
+	// // Scaling Matrices (여기 utils는 CDSL 라이브러리)
+	// GBar := utils.ScalMatMult(1/s, G)
+	// HBar := utils.ScalMatMult(1/s, H)
+	// RBar := utils.ScalMatMult(1/s, R)
 
 	// RGSW Encryption
 	ctF := RGSW.EncPack(F, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
