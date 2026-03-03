@@ -118,12 +118,19 @@ def control_loop():
             startTime = time.time()
             
             while not KILL_THREAD:
+<<<<<<< HEAD
                 # 1. Sensor Read 
+=======
+                # -----------------------------------------------------
+                # 1. 측정 (시뮬레이션 y = plant.get_output())
+                # -----------------------------------------------------
+>>>>>>> 666128f5a5b79cc9e6efea3d32d512946bf89db6
                 myQube.read_outputs()
                 theta = myQube.motorPosition * -1 
                 alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
                 y = [theta, alpha]
 
+<<<<<<< HEAD
                 # 2. Receive Encrypted Control Input
                 u_enc_bytes = recv_packet(client_socket) # Serialized data
                 if not u_enc_bytes: break
@@ -134,11 +141,37 @@ def control_loop():
                 print(u) # Debug
 
                 # 4. Send Enc(y) + ReEnc(u)
+=======
+                # -----------------------------------------------------
+                # 2. 수신 (시뮬레이션 u_enc = recv_packet)
+                # -----------------------------------------------------
+                u_enc_bytes = recv_packet(client_socket)
+                if not u_enc_bytes: break
+
+                # -----------------------------------------------------
+                # 3. 복호화 (시뮬레이션 u = decrypt_helper)
+                # -----------------------------------------------------
+                u = decrypt_helper(u_enc_bytes, N_INPUT) 
+                if u is None: break
+                print(u) # 시뮬레이션과 동일한 출력
+
+                # -----------------------------------------------------
+                # 4. 송신 (시뮬레이션 combined_vec = y + u)
+                # [중요] u를 가공하지 않고 받은 그대로 다시 보냅니다.
+                # -----------------------------------------------------
+>>>>>>> 666128f5a5b79cc9e6efea3d32d512946bf89db6
                 combined_vec = y + u 
                 combined_bytes = encrypt_helper(combined_vec)
                 send_packet(client_socket, combined_bytes)
 
+<<<<<<< HEAD
                 # 5. Actuator Write (near equalibria)
+=======
+                # -----------------------------------------------------
+                # 5. 구동 (하드웨어에만 적용되는 전압 제한)
+                # -----------------------------------------------------
+                # 세워져 있을 때만 모터 가동 (이건 안전 장치이므로 유지)
+>>>>>>> 666128f5a5b79cc9e6efea3d32d512946bf89db6
                 if abs(math.degrees(alpha)) < 15:
                     voltage = np.clip(u[0], -10.0, 10.0)
                 else:
@@ -146,7 +179,13 @@ def control_loop():
                 
                 myQube.write_voltage(-1 * voltage)
 
+<<<<<<< HEAD
                 # 6. Plotting
+=======
+                # -----------------------------------------------------
+                # 6. 로깅
+                # -----------------------------------------------------
+>>>>>>> 666128f5a5b79cc9e6efea3d32d512946bf89db6
                 timeStamp = time.time() - startTime
                 if timeStamp > simulationTime: break
                 scopeBase.sample(timeStamp, [theta])
