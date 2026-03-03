@@ -6,10 +6,10 @@
 
 python test 파일이 작업파일  
 controller.go 파일로 클라우드 실행  
-plant.py : 뼈대
-plant_sim : ABC를 플랜트 
-plant_real : 실제 실험장비 + 손으로 세우기
-plant_swing : 실제실험장비 + 스윙업
+plant.py : 뼈대  
+plant_sim : ABC를 플랜트   
+plant_real : 실제 실험장비 + 손으로 세우기  
+plant_swing : 실제실험장비 + 스윙업  
 
 
 ### 2. Datadrvien
