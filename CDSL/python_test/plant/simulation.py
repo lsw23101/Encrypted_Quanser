@@ -11,7 +11,7 @@ import control as ct
 # ==========================================
 # 1. Go 암호화 라이브러리 로드
 # ==========================================
-lib_name = "./client_crypto.so"
+lib_name = "../crypto/client_crypto.so"
 if os.name == 'nt' and not os.path.exists(lib_name):
     lib_name = "./client_crypto.dll"
 
@@ -226,7 +226,7 @@ def run_plant_simulation():
             print("--- Simulation Finished ---")
             
             # CSV 저장
-            with open('plant_data_python.csv', 'w', newline='') as f:
+            with open('sim_data/plant_data_python.csv', 'w', newline='') as f:
                 writer = csv.writer(f)
                 header = ['iter'] + [f'y{k}' for k in range(N_OUTPUT)] + [f'u{k}' for k in range(N_INPUT)]
                 writer.writerow(header)

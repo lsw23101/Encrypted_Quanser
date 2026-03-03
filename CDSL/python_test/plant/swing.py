@@ -20,7 +20,7 @@ from pal.utilities.math import ddt_filter
 # ========================================================
 # 2. Go 암호화 라이브러리 및 통신 설정
 # ========================================================
-lib_name = "./client_crypto.so"
+lib_name = "../crypto/client_crypto.so"
 if os.name == 'nt' and not os.path.exists(lib_name):
     lib_name = "./client_crypto.dll"
 

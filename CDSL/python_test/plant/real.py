@@ -19,9 +19,9 @@ from pal.utilities.scope import Scope
 # ========================================================
 # 2. Go 암호화 라이브러리 로드
 # ========================================================
-lib_name = "./client_crypto.so"
+lib_name = "../crypto/client_crypto.so"
 if os.name == 'nt' and not os.path.exists(lib_name):
-    lib_name = "./client_crypto.dll"
+    lib_name = "../client_crypto.dll"
 
 try:
     lib = ctypes.CDLL(lib_name)
