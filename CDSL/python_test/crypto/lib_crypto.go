@@ -59,7 +59,7 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	tau = int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
 	// 4. 키 로드
-	loadDir := "enc_data"
+	loadDir := "../controller/enc_data"
 	sk := new(rlwe.SecretKey)
 	if err := fileutils.ReadRT(filepath.Join(loadDir, "sk.dat"), sk); err != nil {
 		panic("Key Load Fail: " + err.Error())

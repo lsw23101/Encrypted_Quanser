@@ -76,7 +76,7 @@ def control_loop():
     qubeVersion = 3   
     hardware = 1      
     pendulum = 1      
-    frequency = 50    # 20ms
+    frequency = 40    # 20ms
     # frequency = 20    # 20ms
     
     # LQR Gain (K)
