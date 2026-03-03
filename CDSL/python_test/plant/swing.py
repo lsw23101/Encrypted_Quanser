@@ -18,11 +18,11 @@ from pal.utilities.scope import Scope
 from pal.utilities.math import ddt_filter
 
 # ========================================================
-# 2. Go 암호화 라이브러리 및 통신 설정
+# 2. Go 암호화 라이브러리 로드
 # ========================================================
 lib_name = "../crypto/client_crypto.so"
 if os.name == 'nt' and not os.path.exists(lib_name):
-    lib_name = "./client_crypto.dll"
+    lib_name = "../client_crypto.dll"
 
 try:
     lib = ctypes.CDLL(lib_name)
@@ -80,14 +80,12 @@ SIGN_VOLTAGE = -1.0
 SWING_KICK_DIR = 1.0  
 VMAX = 7.0
 
-# Swing-up Parameters
 mp, Lp, g = 0.024, 0.129, 9.81
 l = Lp / 2
 Jp = mp * (Lp**2) / 3 
 mu = 150.0 
 switch_deg = 15.0 
 
-# Balancing LQR Gain (Local)
 K_LOCAL = np.array([-2.0, 28.0, -1.5, 2.5]) 
 
 KILL_THREAD = False 
@@ -96,11 +94,17 @@ def sig_handler(*args):
     KILL_THREAD = True
 signal.signal(signal.SIGINT, sig_handler)
 
+scopePendulum = Scope(title='Pendulum alpha (rad)', timeWindow=10, xLabel='Time (s)', yLabel='Rad')
+scopePendulum.attachSignal(name='Alpha', width=1)
+scopeBase = Scope(title='Base theta (rad)', timeWindow=10, xLabel='Time (s)', yLabel='Rad')
+scopeBase.attachSignal(name='Theta', width=1)
+scopeVoltage = Scope(title='Control Input (V)', timeWindow=10, xLabel='Time (s)', yLabel='Volts')
+scopeVoltage.attachSignal(name='u', width=1)
+
 # ========================================================
 # 4. Main Control Loop
 # ========================================================
 def control_loop():
-    # 전역 변수 참조 선언 (에러 해결 핵심)
     global KILL_THREAD
     
     HOST, PORT = '127.0.0.1', 8000
@@ -110,11 +114,17 @@ def control_loop():
     
     lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
 
-    # Scopes
-    scopePendulum = Scope(title='Pendulum alpha', timeWindow=10, xLabel='Time (s)', yLabel='Rad')
-    scopePendulum.attachSignal(name='Alpha')
-    scopeVoltage = Scope(title='Control Input', timeWindow=10, xLabel='Time (s)', yLabel='Volts')
-    scopeVoltage.attachSignal(name='Voltage')
+    # ★ 해결책 1: 스윙업을 시작하기 "전"에 무조건 통신 연결부터 마무리합니다.
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    print(">> Waiting for Server Connection...")
+    while not KILL_THREAD:
+        try:
+            client_socket.connect((HOST, PORT))
+            print(">> Connected to Encrypted Controller!")
+            break
+        except ConnectionRefusedError:
+            time.sleep(1)
 
     with QubeServo3(hardware=1, pendulum=1, frequency=frequency) as myQube:
         print(">> Step 1: Swing-up & Local Balancing Started.")
@@ -127,7 +137,7 @@ def control_loop():
         startTime = time.time()
 
         # ---------------------------------------------------------------------
-        # PHASE 1: Local Swing-up & LQR (로컬 안착)
+        # PHASE 1: Local Swing-up & LQR
         # ---------------------------------------------------------------------
         while not is_fully_stable and not KILL_THREAD:
             myQube.read_outputs()
@@ -147,7 +157,7 @@ def control_loop():
                 
                 if stable_start_time is None:
                     stable_start_time = time.time()
-                elif time.time() - stable_start_time > 1.5:
+                elif time.time() - stable_start_time > 3.0:
                     is_fully_stable = True
             else:
                 stable_start_time = None
@@ -162,59 +172,68 @@ def control_loop():
             
             ts = time.time() - startTime
             scopePendulum.sample(ts, [alpha])
+            scopeBase.sample(ts, [theta])
             scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
-            Scope.refreshAll()
+            # ★ 해결책 2: 루프 안의 Scope.refreshAll() 삭제
 
-        if KILL_THREAD: return
+        if KILL_THREAD: 
+            client_socket.close()
+            return
 
         # ---------------------------------------------------------------------
-        # PHASE 2: Encrypted Control (암호화 제어 전환)
+        # PHASE 2: Encrypted Control (통신 딜레이 없음)
         # ---------------------------------------------------------------------
         print(">> Step 2: Switching to Encrypted Control.")
         
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            while not KILL_THREAD:
-                try:
-                    client_socket.connect((HOST, PORT))
-                    print(">> Connected to Encrypted Controller!")
-                    break
-                except ConnectionRefusedError:
-                    time.sleep(0.5)
+        while not KILL_THREAD:
+            myQube.read_outputs()
+            theta = myQube.motorPosition * SIGN_THETA
+            alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
+            y = [theta, alpha]
 
-            while not KILL_THREAD:
-                myQube.read_outputs()
-                theta = myQube.motorPosition * SIGN_THETA
-                alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
-                y = [theta, alpha]
+            u_enc_bytes = recv_packet(client_socket)
+            if not u_enc_bytes: break
 
-                u_enc_bytes = recv_packet(client_socket)
-                if not u_enc_bytes: break
+            u_dec = decrypt_helper(u_enc_bytes, N_INPUT)
+            if u_dec is None: break
 
-                u_dec = decrypt_helper(u_enc_bytes, N_INPUT)
-                if u_dec is None: break
+            # 즉각적인 모터 구동
+            if abs(math.degrees(alpha)) < 20:
+                voltage = np.clip(u_dec[0], -VMAX, VMAX)
+            else:
+                print(">> Out of Range! Emergency Stop.")
+                voltage = 0.0
+                KILL_THREAD = True
 
-                # 피드백 송신
-                combined_vec = y + u_dec 
-                combined_bytes = encrypt_helper(combined_vec)
-                send_packet(client_socket, combined_bytes)
+            myQube.write_voltage(voltage * SIGN_VOLTAGE)
 
-                if abs(math.degrees(alpha)) < 20:
-                    voltage = np.clip(u_dec[0], -VMAX, VMAX)
-                else:
-                    print(">> Out of Range! Emergency Stop.")
-                    voltage = 0.0
-                    KILL_THREAD = True
+            # 남는 시간에 암호화 및 전송
+            combined_vec = y + u_dec 
+            combined_bytes = encrypt_helper(combined_vec)
+            send_packet(client_socket, combined_bytes)
 
-                myQube.write_voltage(voltage * SIGN_VOLTAGE)
-
-                ts = time.time() - startTime
-                scopePendulum.sample(ts, [alpha])
-                scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
-                Scope.refreshAll()
+            ts = time.time() - startTime
+            scopePendulum.sample(ts, [alpha])
+            scopeBase.sample(ts, [theta])
+            scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
+            # ★ 해결책 2: 루프 안의 Scope.refreshAll() 삭제
 
         myQube.write_voltage(0.0)
+        client_socket.close()
         print(">> Finished.")
 
+def main():
+    global KILL_THREAD
+    thread = Thread(target=control_loop)
+    thread.daemon = True
+    thread.start()
+    
+    # GUI 렌더링은 오직 여기서만 수행됩니다.
+    while thread.is_alive() and not KILL_THREAD:
+        Scope.refreshAll()
+        time.sleep(0.01)
+    
+    KILL_THREAD = True
+
 if __name__ == "__main__":
-    control_loop()
+    main()
