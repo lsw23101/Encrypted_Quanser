@@ -4,7 +4,8 @@
 기존 라이브러리 위에서 python 으로 go 언어의 암호 라이버리를 쓸 수 있도록 만듦  
 => go 함수를 파이썬 라이브러리로 설정 => 플랜트는 파이썬 언어로 암호화 및 통신 => 컨트롤러는 go 이용  
 
-python test 파일이 작업파일  
+python test 폴더가 작업폴더  
+
 controller.go 파일로 클라우드 실행  
 plant.py : 뼈대  
 plant_sim : ABC를 플랜트   
