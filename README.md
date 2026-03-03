@@ -6,12 +6,8 @@
 
 python test 폴더가 작업폴더  
 
-controller.go 파일로 클라우드 실행  
-plant.py : 뼈대  
-plant_sim : ABC를 플랜트   
-plant_real : 실제 실험장비 + 손으로 세우기  
-plant_swing : 실제실험장비 + 스윙업  
-
+real.py 했을때 20ms 이내로 찍힌다  
+swing은 과도응답 때문인지 금방 넘어짐 근데 과도응답 문제가 아니라 그냥 어딘가 문제가 있어보임
 
 ### 2. Datadrvien
 데이터 기반 제어를 하기 위해서 데이터를 얻는 코드와 그것으로 컨트롤러 설계 (poleplacement) 및 시뮬레이션과 그 제어기로 실험 했을 시 제어가 가능함  
