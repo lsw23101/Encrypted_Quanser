@@ -76,7 +76,7 @@ func main() {
 
 	// 파라미터 로드
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
+		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
 	})
 	ringQ := params.RingQ()
 
@@ -158,9 +158,10 @@ func main() {
 			evaluatorRGSW, evaluatorRLWE, ringQ, monomials, params, n, m, p, tau)
 	}
 }
+
 func handleEncryptedControl(
 	conn net.Conn,
-	xCtPack *rlwe.Ciphertext,
+	xCtPack *rlwe.Ciphertext, // Encrypted State
 	ctF, ctG, ctH, ctR []*rgsw.Ciphertext,
 	evaluatorRGSW *rgsw.Evaluator,
 	evaluatorRLWE *rlwe.Evaluator,
@@ -172,66 +173,70 @@ func handleEncryptedControl(
 	defer conn.Close()
 	iter := 0
 
-	fmt.Println(">> Controller Loop Started (Optimized Flow - No Rotate)")
-
 	for {
 		start := time.Now()
 
 		// ---------------------------------------------------------
-		// Step 1. Compute Encrypted u = H * x & Send Immediately
+		// Step 1. Receive Encrypted y from Plant
 		// ---------------------------------------------------------
+		yCtPack, err := readCiphertext(conn)
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println("Read y Error:", err)
+			}
+			return
+		}
+
+		// ---------------------------------------------------------
+		// Step 2. Compute Encrypted u = H * x
+		// ---------------------------------------------------------
+		// Unpack State & Input
 		xCt := RLWE.UnpackCt(xCtPack, n, tau, evaluatorRLWE, ringQ, monomials, params)
+
+		// Unpack y (for State Update later)
+		yCt := RLWE.UnpackCt(yCtPack, p, tau, evaluatorRLWE, ringQ, monomials, params)
 
 		// u = Hx
 		uCtPack := RGSW.MultPack(xCt, ctH, evaluatorRGSW, ringQ, params)
 
-		// u 전송
+		// ---------------------------------------------------------
+		// Step 3. Send Encrypted u to Plant
+		// ---------------------------------------------------------
 		if err := writeCiphertext(conn, uCtPack); err != nil {
 			fmt.Println("Write u Error:", err)
 			return
 		}
 
 		// ---------------------------------------------------------
-		// Step 2. Receive Combined Ciphertext [y | u] from Plant
+		// Step 4. Receive Re-Encrypted u from Plant
 		// ---------------------------------------------------------
-		combinedCt, err := readCiphertext(conn)
+		uReEnc, err := readCiphertext(conn)
 		if err != nil {
-			if err != io.EOF {
-				fmt.Println("Read Combined CT Error:", err)
-			}
+			fmt.Println("Read ReEnc u Error:", err)
 			return
 		}
 
 		// ---------------------------------------------------------
-		// Step 3. Unpack All (y and u) at once
-		// ---------------------------------------------------------
-		// Rotate 필요 없음!
-		// 그냥 p + m 개를 한꺼번에 Unpack 해달라고 요청합니다.
-		// totalUnpacked = [y_0, y_1, u_0] (순서대로 들어옴)
-		totalUnpacked := RLWE.UnpackCt(combinedCt, p+m, tau, evaluatorRLWE, ringQ, monomials, params)
-
-		// Go Slice로 분리
-		yCt := totalUnpacked[:p]                 // 앞쪽 p개 (0 ~ 1)
-		uReEncUnpacked := totalUnpacked[p : p+m] // 뒤쪽 m개 (2 ~ 2)
-
-		// ---------------------------------------------------------
-		// Step 4. Compute x_next = Fx + Gy + Ru
+		// Step 5. Update State: x_next = Fx + Gy + Ru
 		// ---------------------------------------------------------
 		// Fx
 		FxCt := RGSW.MultPack(xCt, ctF, evaluatorRGSW, ringQ, params)
-
 		// Gy
 		GyCt := RGSW.MultPack(yCt, ctG, evaluatorRGSW, ringQ, params)
 
-		// Ru (분리해낸 uReEncUnpacked 사용)
-		RuCt := RGSW.MultPack(uReEncUnpacked, ctR, evaluatorRGSW, ringQ, params)
+		// Ru 계산을 위해 uReEnc도 Unpack 수행! (여기가 수정됨)
+		// u의 차원은 m 입니다.
+		uCt := RLWE.UnpackCt(uReEnc, m, tau, evaluatorRLWE, ringQ, monomials, params)
 
-		// State Update
+		// Ru (Unpacked u 사용)
+		RuCt := RGSW.MultPack(uCt, ctR, evaluatorRGSW, ringQ, params)
+
+		// x_next 합산
 		xCtPack = RLWE.Add(FxCt, GyCt, RuCt, params)
 
 		elapsed := time.Since(start).Milliseconds()
 		if iter%100 == 0 {
-			fmt.Printf("Iter %d: Cycle Time %d ms (1-Round Trip)\n", iter, elapsed)
+			fmt.Printf("Iter %d: Cycle Time %d ms (Fully Encrypted)\n", iter, elapsed)
 		}
 		iter++
 	}
