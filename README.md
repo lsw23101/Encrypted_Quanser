@@ -4,14 +4,18 @@
 서울대학교 CDSL 연구팀 라이브러리
 
 ### 1. Quanser
-CDSL 라이브러리 기반으로 
-python 환경에서 Quanser 실험장비에 암복호화 및 통신 수행
+CDSL 라이브러리 기반으로 Quanser 실험장비에 암호 제어 적용
+재암호화 방법 적용 + time scheduling 으로 통신은 송수신 한번씩 수행
 
-controller.go 파일과 swing.py 파일로 실행가능
+- controller/controller.go : x_c unpack + u = Hx 계산 후 송신 - y 수신 - state update  
+- plant/swing.py : swing up - Full state LQR (1s) - Enc. control
+- plant/real.py : 위에서 스윙업 없음 (손으로 올리기)
+- plant/simulation.py : 디버그용 시뮬레이션
 
-swing up - 1초 LQR full state - Encrypted RGSW  
 샘플링시간 20ms  
-10번해서 10번 잘 돌아감 (스윙업이 이상할 경우에 선정리)
+10번해서 10번 1분 이상 잘 돌아감 (스윙업이 이상할 경우에 선정리)
+
+추후 Lattigo 폴더 이외의 다른 연구팀의 work을 추가할 계획
 
 ### 2. Datadrvien
 데이터 기반 제어를 하기 위해서 데이터를 얻는 코드와 그것으로 컨트롤러 설계 (poleplacement) 및 시뮬레이션과 그 제어기로 실험 했을 시 제어가 가능함  
