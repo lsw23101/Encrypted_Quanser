@@ -21,7 +21,7 @@ import (
 func main() {
 	fmt.Println("--- [Offline Phase] Generating Keys & Encrypting Matrices ---")
 
-	// 1. 파라미터 설정
+	// 1. 파라미터 설정 (controller, crypto 파일의 파라미터와 동일하게 설정!!)
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    12,
 		LogQ:    []int{60},
@@ -36,7 +36,7 @@ func main() {
 	fmt.Printf("Params: LogN=%d, 1/r=%.1f, 1/s=%.1f, 1/L=%.1f\n", params.LogN(), 1/r, 1/s, 1/L)
 
 	// 2. 제어기 모델
-	// F Matrix (4x4) - 기존과 동일
+	// F (integer matrix !)
 	F := [][]float64{
 		{0.0000, -0.0000, -0.0000, -0.0000},
 		{1.0000, 0.0000, 0.0000, -2.0000},

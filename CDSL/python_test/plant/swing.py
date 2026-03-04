@@ -9,17 +9,13 @@ import math
 import numpy as np
 from threading import Thread
 
-# ========================================================
 # 1. Quanser Library Setup
-# ========================================================
 sys.path.append(r"C:\Quanser\0_libraries\python")
 from pal.products.qube import QubeServo3
 from pal.utilities.scope import Scope
 from pal.utilities.math import ddt_filter
 
-# ========================================================
-# 2. Go 암호화 라이브러리 로드
-# ========================================================
+# 2. Lattigo 암호화 라이브러리 로드
 lib_name = "../crypto/client_crypto.so"
 if os.name == 'nt' and not os.path.exists(lib_name):
     lib_name = "../client_crypto.dll"
@@ -39,6 +35,8 @@ lib.DecryptVector.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 lib.DecryptVector.restype = ctypes.POINTER(ctypes.c_double)
 lib.FreePtr.argtypes = [ctypes.c_void_p]
 
+
+# 통신 및 암복호화 함수들...
 def send_packet(sock, data_bytes):
     length = len(data_bytes)
     sock.sendall(struct.pack('<I', length) + data_bytes)
@@ -72,20 +70,18 @@ def decrypt_helper(data_bytes, out_len):
     lib.FreePtr(ptr)
     return res
 
-# ========================================================
-# 3. 제어 파라미터 및 스위치
-# ========================================================
+# Swing-up params
 SIGN_THETA = -1.0 
 SIGN_VOLTAGE = -1.0 
 SWING_KICK_DIR = 1.0  
 VMAX = 7.0
-
 mp, Lp, g = 0.024, 0.129, 9.81
 l = Lp / 2
 Jp = mp * (Lp**2) / 3 
 mu = 150.0 
 switch_deg = 15.0 
 
+# Full state LQR gain
 K_LOCAL = np.array([-2.0, 28.0, -1.5, 2.5]) 
 
 KILL_THREAD = False 
@@ -94,6 +90,7 @@ def sig_handler(*args):
     KILL_THREAD = True
 signal.signal(signal.SIGINT, sig_handler)
 
+# Plotting
 scopePendulum = Scope(title='Pendulum alpha (rad)', timeWindow=10, xLabel='Time (s)', yLabel='Rad')
 scopePendulum.attachSignal(name='Alpha', width=1)
 scopeBase = Scope(title='Base theta (rad)', timeWindow=10, xLabel='Time (s)', yLabel='Rad')
@@ -101,20 +98,18 @@ scopeBase.attachSignal(name='Theta', width=1)
 scopeVoltage = Scope(title='Control Input (V)', timeWindow=10, xLabel='Time (s)', yLabel='Volts')
 scopeVoltage.attachSignal(name='u', width=1)
 
-# ========================================================
 # 4. Main Control Loop
-# ========================================================
 def control_loop():
     global KILL_THREAD
     
     HOST, PORT = '127.0.0.1', 8000
     N_STATE, N_INPUT, N_OUTPUT = 4, 1, 2
     VAL_S, VAL_L, VAL_R = 1.0/1000.0, 1.0/1000000.0, 1.0/1000.0
+    # 50Hz = 20ms sampling rate
     frequency = 50 
     
     lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
 
-    # ★ 해결책 1: 스윙업을 시작하기 "전"에 무조건 통신 연결부터 마무리합니다.
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     print(">> Waiting for Server Connection...")
@@ -136,9 +131,7 @@ def control_loop():
         is_fully_stable = False
         startTime = time.time()
 
-        # ---------------------------------------------------------------------
-        # PHASE 1: Local Swing-up & LQR
-        # ---------------------------------------------------------------------
+        # PHASE 1: Swing-up & LQR (Local)
         while not is_fully_stable and not KILL_THREAD:
             myQube.read_outputs()
             theta = myQube.motorPosition * SIGN_THETA
@@ -157,7 +150,7 @@ def control_loop():
                 
                 if stable_start_time is None:
                     stable_start_time = time.time()
-                elif time.time() - stable_start_time > 3.0:
+                elif time.time() - stable_start_time > 1.0:
                     is_fully_stable = True
             else:
                 stable_start_time = None
@@ -174,7 +167,6 @@ def control_loop():
             scopePendulum.sample(ts, [alpha])
             scopeBase.sample(ts, [theta])
             scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
-            # ★ 해결책 2: 루프 안의 Scope.refreshAll() 삭제
 
         if KILL_THREAD: 
             client_socket.close()
@@ -186,17 +178,19 @@ def control_loop():
         print(">> Step 2: Switching to Encrypted Control.")
         
         while not KILL_THREAD:
+            # 1. sensor read
             myQube.read_outputs()
             theta = myQube.motorPosition * SIGN_THETA
             alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
             y = [theta, alpha]
 
+            # 2. recieve Enc(u)
             u_enc_bytes = recv_packet(client_socket)
             if not u_enc_bytes: break
-
             u_dec = decrypt_helper(u_enc_bytes, N_INPUT)
             if u_dec is None: break
 
+            # 3. actuator write
             # 즉각적인 모터 구동
             if abs(math.degrees(alpha)) < 20:
                 voltage = np.clip(u_dec[0], -VMAX, VMAX)
@@ -204,20 +198,20 @@ def control_loop():
                 print(">> Out of Range! Emergency Stop.")
                 voltage = 0.0
                 KILL_THREAD = True
-
             myQube.write_voltage(voltage * SIGN_VOLTAGE)
 
-            # 남는 시간에 암호화 및 전송
+            # 4. send Enc(y) & ReEnc(u)
             combined_vec = y + u_dec 
             combined_bytes = encrypt_helper(combined_vec)
             send_packet(client_socket, combined_bytes)
 
+            # Plotting
             ts = time.time() - startTime
             scopePendulum.sample(ts, [alpha])
             scopeBase.sample(ts, [theta])
             scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
-            # ★ 해결책 2: 루프 안의 Scope.refreshAll() 삭제
 
+        # Finish loop
         myQube.write_voltage(0.0)
         client_socket.close()
         print(">> Finished.")

@@ -20,7 +20,7 @@ import (
 	"github.com/tuneinsight/lattigo/v6/ring"
 )
 
-// --- 네트워크 통신 헬퍼 함수 (길이 + 데이터) ---
+// Lattigo 데이터 송수신 함수들...
 
 // 데이터 전송: [Length(4bytes)][Payload...]
 func writeCiphertext(conn net.Conn, ct *rlwe.Ciphertext) error {
@@ -68,13 +68,11 @@ func readCiphertext(conn net.Conn) (*rlwe.Ciphertext, error) {
 }
 
 func main() {
-	// *****************************************************************
-	// 1. 설정 및 데이터 불러오기
-	// *****************************************************************
+	// 1. 오프라인 암호문 읽기
 	fmt.Println("--- [Go Controller] Loading FHE Context... ---")
 	loadDir := "enc_data"
 
-	// 파라미터 로드
+	// RWLE 파라미터 (128-bit 조금 부족)
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
 	})
@@ -87,7 +85,7 @@ func main() {
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	// Monomials 생성
+	// Monomials 생성 
 	logn := int(math.Log2(float64(tau)))
 	monomials := make([]ring.Poly, logn)
 	for i := 0; i < logn; i++ {
@@ -98,7 +96,7 @@ func main() {
 		ringQ.NTT(monomials[i], monomials[i])
 	}
 
-	// 키 로드
+	// 키 로드 (비밀키는 로드 x)
 	rlk := new(rlwe.RelinearizationKey)
 	if err := fileutils.ReadRT(filepath.Join(loadDir, "rlk.dat"), rlk); err != nil {
 		panic(err)
@@ -116,7 +114,7 @@ func main() {
 	ctH, _ := fileutils.LoadRGSWPack(loadDir, "ctH")
 	ctR, _ := fileutils.LoadRGSWPack(loadDir, "ctR")
 
-	// 초기 상태 로드
+	// 제어기 상태 초기값 로드
 	xCtPackTemplate := new(rlwe.Ciphertext)
 	if err := fileutils.ReadRT(filepath.Join(loadDir, "xCtPack.dat"), xCtPackTemplate); err != nil {
 		panic(err)
@@ -128,11 +126,9 @@ func main() {
 	evaluatorRGSW := rgsw.NewEvaluator(params, evkRGSW)
 	evaluatorRLWE := rlwe.NewEvaluator(params, evkRLWE)
 
-	fmt.Println("--- Ready for Fully Encrypted TCP ---")
+	fmt.Println("--- Ready ---")
 
-	// *****************************************************************
 	// 2. TCP 서버 시작
-	// *****************************************************************
 	HOST, PORT := "localhost", "8000"
 	listener, err := net.Listen("tcp", HOST+":"+PORT)
 	if err != nil {

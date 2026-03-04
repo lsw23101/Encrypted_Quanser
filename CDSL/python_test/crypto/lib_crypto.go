@@ -44,7 +44,7 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	L = float64(in_L)
 	r = float64(in_r)
 
-	// 2. 파라미터 로드 (Lattigo 파라미터는 고정이라고 가정)
+	// 2. 파라미터 로드 (컨트롤러, offline 코드와 동일한 파라미터 설정 !!)
 	var err error
 	params, err = rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
