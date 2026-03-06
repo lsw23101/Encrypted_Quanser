@@ -161,12 +161,12 @@ def control_loop():
                 else: u = u_raw
 
             voltage = np.clip(u, -VMAX, VMAX)
-            myQube.write_voltage(voltage * SIGN_VOLTAGE)
+            myQube.write_voltage(-1 * voltage)
             
             ts = time.time() - startTime
             scopePendulum.sample(ts, [alpha])
             scopeBase.sample(ts, [theta])
-            scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
+            scopeVoltage.sample(ts, [-1 * voltage])
 
         if KILL_THREAD: 
             client_socket.close()
@@ -198,7 +198,7 @@ def control_loop():
                 print(">> Out of Range! Emergency Stop.")
                 voltage = 0.0
                 KILL_THREAD = True
-            myQube.write_voltage(voltage * SIGN_VOLTAGE)
+            myQube.write_voltage(voltage)
 
             # 4. send Enc(y) & ReEnc(u)
             combined_vec = y + u_dec 

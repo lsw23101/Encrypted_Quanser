@@ -33,7 +33,7 @@ B = sysD.B;
 [l,~] = size(C);
 
 % controller design
-Q = [5000 0 0 0; 0 100 0 0; 0 0 0 0; 0 0 0 0];
+Q = [10000 0 0 0; 0 100 0 0; 0 0 0 0; 0 0 0 0];
 R1 = eye(m);
 R2 = eye(l);
 [~, K, ~] = idare(A,B,Q,R1,[],[]);
@@ -274,6 +274,12 @@ print_go('H', H_, 4);
 print_go('R', R_, 4);
 
 fprintf('// --------------------------------\n');
+
+print_go('F', round(F_), 4);
+print_go('GBar', round(G_*1000), 0);
+print_go('HBar', round(H_*1000), 0);
+print_go('RBar', round(R_*1000), 0);
+
 
 %% [유틸리티 함수] Go 포맷 출력기
 function print_go(name, M, prec)

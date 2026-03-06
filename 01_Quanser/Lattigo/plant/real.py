@@ -143,7 +143,7 @@ def control_loop():
                 else:
                     voltage = 0.0
                 
-                myQube.write_voltage(-1 * voltage)
+                myQube.write_voltage(1 * voltage)
 
                 # 6. 로깅 및 플로팅
                 timeStamp = time.time() - startTime
