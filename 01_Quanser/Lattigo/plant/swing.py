@@ -72,7 +72,6 @@ def decrypt_helper(data_bytes, out_len):
 
 # Swing-up params
 SIGN_THETA = -1.0 
-SIGN_VOLTAGE = -1.0 
 SWING_KICK_DIR = 1.0  
 VMAX = 7.0
 mp, Lp, g = 0.024, 0.129, 9.81
@@ -209,7 +208,7 @@ def control_loop():
             ts = time.time() - startTime
             scopePendulum.sample(ts, [alpha])
             scopeBase.sample(ts, [theta])
-            scopeVoltage.sample(ts, [voltage * SIGN_VOLTAGE])
+            scopeVoltage.sample(ts, [voltage])
 
         # Finish loop
         myQube.write_voltage(0.0)

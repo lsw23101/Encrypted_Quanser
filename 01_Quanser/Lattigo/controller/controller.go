@@ -68,8 +68,8 @@ func readCiphertext(conn net.Conn) (*rlwe.Ciphertext, error) {
 }
 
 func main() {
-	// 1. 오프라인 암호문 읽기
-	fmt.Println("--- [Go Controller] Loading FHE Context... ---")
+	// 1. RLWE Params
+	fmt.Println("--- RLWE params ---")
 	loadDir := "enc_data"
 
 	// RWLE 파라미터 (128-bit 조금 부족)
@@ -85,7 +85,20 @@ func main() {
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	// Monomials 생성 
+	// params
+	fmt.Println("Degree of polynomials:", params.N())
+	fmt.Println("Ciphertext modulus:", params.QBigInt())
+	fmt.Println("Special modulus:", params.PBigInt())
+	// Default secret key distribution
+	// Each coefficient in the polynomial is uniformly sampled in [-1, 0, 1]
+	fmt.Println("Secret key distribution (Ternary):", params.Xs())
+	// Default error distribution
+	// Each coefficient in the polynomial is sampled according to a
+	// discrete Gaussian distribution with standard deviation 3.2 and bound 19.2
+	fmt.Println("Error distribution (Discrete Gaussian):", params.Xe())
+
+
+	// Monomials 생성 for unpack
 	logn := int(math.Log2(float64(tau)))
 	monomials := make([]ring.Poly, logn)
 	for i := 0; i < logn; i++ {
@@ -168,7 +181,7 @@ func handleEncryptedControl(
 	defer conn.Close()
 	iter := 0
 
-	fmt.Println(">> Controller Loop Started (Optimized Flow - No Rotate)")
+	fmt.Println(">> Controller Loop Started ")
 
 	for {
 		start := time.Now()
@@ -193,8 +206,8 @@ func handleEncryptedControl(
 		// 3. Unpack
 		// totalUnpacked = [y_0, y_1, u_0]
 		totalUnpacked := RLWE.UnpackCt(combinedCt, p+m, tau, evaluatorRLWE, ringQ, monomials, params)
-		yCt := totalUnpacked[:p]                 // 앞쪽 p개 (0 ~ 1)
-		uReEncUnpacked := totalUnpacked[p : p+m] // 뒤쪽 m개 (2 ~ 2)
+		yCt := totalUnpacked[:p]                 // y
+		uReEncUnpacked := totalUnpacked[p : p+m] // u
 
 		// 4. State update
 		FxCt := RGSW.MultPack(xCt, ctF, evaluatorRGSW, ringQ, params)            // Fx
@@ -205,7 +218,7 @@ func handleEncryptedControl(
 		// Time log
 		elapsed := time.Since(start).Milliseconds()
 		if iter%100 == 0 {
-			fmt.Printf("Iter %d: Cycle Time %d ms (1-Round Trip)\n", iter, elapsed)
+			fmt.Printf("Iter %d: Cycle Time %d ms\n", iter, elapsed)
 		}
 		iter++
 	}
