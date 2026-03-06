@@ -216,9 +216,11 @@ def control_loop():
         startTime = time.time()
 
         while timeStamp < simulationTime and not KILL_THREAD:
-
+            
+            t1 = time.perf_counter()
             # Read sensor information
             myQube.read_outputs()
+            t2 = time.perf_counter()
 
             theta = myQube.motorPosition * -1
             alpha_f =  myQube.pendulumPosition
@@ -268,7 +270,13 @@ def control_loop():
 
             # # Write commands
             # 실제 실험 장비에 전압 인가하는 함수로 보임
+
             myQube.write_voltage(u)
+            t3 = time.perf_counter()
+            # [여기에 삽입!] 제어 입력(전압)을 모터에 쏜 직후에 쉬어야 합니다.
+            time.sleep(0.01)
+            print(f"Read 대기 시간: {(t2 - t1)*1000:.2f}ms | 계산+Write 시간: {(t3 - t2)*1000:.2f}ms")
+            
             # myQube.write_voltage(voltage)
             
 

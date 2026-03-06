@@ -177,17 +177,22 @@ def control_loop():
         print(">> Step 2: Switching to Encrypted Control.")
         
         while not KILL_THREAD:
-            # 1. sensor read
-            myQube.read_outputs()
-            theta = myQube.motorPosition * SIGN_THETA
-            alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
-            y = [theta, alpha]
+
 
             # 2. recieve Enc(u)
             u_enc_bytes = recv_packet(client_socket)
             if not u_enc_bytes: break
             u_dec = decrypt_helper(u_enc_bytes, N_INPUT)
             if u_dec is None: break
+
+
+            # 1. sensor read
+            myQube.read_outputs()
+            theta = myQube.motorPosition * SIGN_THETA
+            alpha = (myQube.pendulumPosition - np.pi + np.pi) % (2*np.pi) - np.pi
+            y = [theta, alpha]
+
+
 
             # 3. actuator write
             # 즉각적인 모터 구동
@@ -198,6 +203,9 @@ def control_loop():
                 voltage = 0.0
                 KILL_THREAD = True
             myQube.write_voltage(voltage)
+            
+            
+
 
             # 4. send Enc(y) & ReEnc(u)
             combined_vec = y + u_dec 
