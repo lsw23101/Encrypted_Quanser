@@ -1,47 +1,48 @@
-# Quanser 관련 작업 정리 
+# SeoulTech Encrypted Control on Quanser
+
+This repository contains the implementation of encrypted control algorithms for the Quanser Qube Servo 3 (Rotary Inverted Pendulum).
+(00, 01 for Encyrpted Control and 02-05 for studying)
 
 
+### 0. CDSL Base Library
+* **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.
 
+### 1. Quanser Implementation
+Applies the CDSL encrypted control library to actual Quanser hardware. 
+* **Communication Optimization:** Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
+* **Core Modules:**
+  * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
+  * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
+  * `plant/real.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
+  * `plant/simulation.py`: Simulation environment for debugging purposes.
+* **Performance:** Operates reliably at a **20ms sampling time**. Achieved a 100% success rate (10/10 runs) maintaining control for over 1 minute (provided hardware wiring is properly managed to avoid swing-up interference).
+* **Future Work:** Plan to integrate implementations from other research groups beyond the current Lattigo-based framework.
 
-''
-### 0. CDSL
-서울대학교 CDSL 연구팀 라이브러리
+### 2. Data-Driven Control
+Modules dedicated to data-driven control methodologies.
+* Contains scripts for system data acquisition.
+* Utilizes the collected data to design controllers (e.g., pole placement) and run simulations.
+* Successfully validated the data-driven controllers on the physical hardware.
 
-### 1. Quanser
-CDSL 라이브러리 기반으로 Quanser 실험장비에 암호 제어 적용
-재암호화 방법 적용 + time scheduling 으로 통신은 송수신 한번씩 수행
+### 3. Enc_Control (Experimental Testing)
+An experimental testbed for evaluating RGSW and RLWE schemes at faster sampling times (10ms and 5ms).
+* **Current Setup:** Communication is handled in plaintext. The entire process (Encryption -> Computation -> Decryption) is executed locally within the controller code to measure pure computational overhead.
+* **Known Issues:** Encountered occasional value spikes (glitches) that lead to system instability and loss of control.
+* **TODO:**
+  - [ ] Identify and resolve the root cause of the unexpected value spikes.
+  - [ ] Implement and test an RCF (Rational Controller Form) based controller under the same high-speed conditions.
 
-- controller/controller.go : x_c unpack + u = Hx 계산 후 송신 - y 수신 - state update  
-- plant/swing.py : swing up - Full state LQR (1s) - Enc. control
-- plant/real.py : 위에서 스윙업 없음 (손으로 올리기)
-- plant/simulation.py : 디버그용 시뮬레이션
+### 4. Swing-up Control
+Focuses on the nonlinear dynamics and swing-up logic for the rotary inverted pendulum.
+* Designed a simulation environment in MATLAB using dynamic equations with matching hardware parameters.
+* `swing.py` deploys this validated logic onto the actual hardware.
+* Successfully achieved automated swing-up at a **20ms sampling time**, using parameter `mu = 150` and a **6V voltage limit**.
+* **Known Issues:** Swing-up logic fails at slower sampling rates (e.g., 50ms) and requires parameter retuning.
+* **TODO:**
+  - [ ] Achieve successful swing-up at slower sampling times.
+  - [ ] Replace the current basic switching logic with a more advanced and robust algorithm.
 
-샘플링시간 20ms  
-10번해서 10번 1분 이상 잘 돌아감 (스윙업이 이상할 경우에 선정리)
-
-추후 Lattigo 폴더 이외의 다른 연구팀의 work을 추가할 계획
-
-### 2. Datadrvien
-데이터 기반 제어를 하기 위해서 데이터를 얻는 코드와 그것으로 컨트롤러 설계 (poleplacement) 및 시뮬레이션과 그 제어기로 실험 했을 시 제어가 가능함  
-
-### 3. Enc_control (테스트 용...)
-RGSW와 RLWE를 각각 10ms 5ms에서 돌려봄 이때 통신은 평문으로 통신하고 암호화 - 연산 - 복호화를 모두 컨트롤러 코드에서 수행함  
-한번씩 값이 튀게 되면서 제어가 안되는 상황이 발생  
-TODO:
-- 위 예외 상황의 원인을 찾고 해결하기  
-- RCF 방식의 제어기도 똑같이 돌려보기  
-
-### 4. Swingup
-매트랩 상에서 동역학 수식을 이용한 비선형 회전 도립진자의 시뮬레이션 환경을 구현 (동일한 파라미터로)  
-위 시뮬레이션을 바탕으로 실험 장비 위에 올리는 코드 swing.py 로 수행  
-20ms 샘플링 시간과 150의 mu 파라미터 그리고 6v의 전압 한계 설정으로 스윙업이 되는 것을 확인하였음  
-샘플링 타임을 늘렸을때 위 파라미터의 수정이 필요하며 50ms 에서는 아직 성공하지 못함  
-TODO:
-- 느린 샘플링 시간에서 스윙업이 되도록...  
-- 지금의 간단한 스위칭 로직 더 좋은 알고리즘 적용...
-
-### 5. Model
-Quanser Qube Servo 3 실험 장비를 구동하기 위해 필요한 선행 지식 및 파라미터 등의 자료  
-qs2와 qs3에서의 각각 파라미터와 동역학 파라미터  
-그리고 실험 장비에 올리는 컨트롤러 설계와 local.py 코드 저장용  
-''
+### 5. System Models & Parameters
+Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
+* Includes parameter comparisons and dynamic models for both Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
+* Stores the baseline controller designs and the `local.py` script for local hardware testing.
