@@ -4,7 +4,7 @@ This repository contains the implementation of encrypted control algorithms for 
 (00, 01 for Encyrpted Control and 02-05 for studying)
 
 
-### 0. CDSL Base Library
+### 0. CDSL Library
 * **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.
 
 ### 1. Quanser Implementation
