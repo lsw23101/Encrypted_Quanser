@@ -3,6 +3,9 @@
 This repository contains the implementation of encrypted control algorithms for the Quanser Qube Servo 3 (Rotary Inverted Pendulum).
 (00, 01 for Encyrpted Control and 02-05 for studying)
 
+See demonstration video !
+https://www.youtube.com/shorts/artZGFfgOVo
+
 
 ### 0. CDSL Library
 * **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.
