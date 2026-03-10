@@ -19,7 +19,7 @@ Utilizes a re-encryption method combined with time scheduling to ensure only a s
 * **Core Modules:**
   * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
   * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
-  * `plant/real.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
+  * `plant/manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
   * `plant/simulation.py`: Simulation environment for debugging purposes.
 
 ### 02_Modeling
