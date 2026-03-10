@@ -26,14 +26,11 @@ var (
 	decryptor *rlwe.Decryptor
 	ringQ     *ring.Ring
 
-	// --- [변경] 전역 변수로 선언만 하고, 값은 Init에서 채움 ---
 	s, L, r float64
 	n, m, p int
 	tau     int
 )
 
-// [변경] 파이썬에서 시스템 차원과 파라미터를 받아옴
-//
 //export InitCrypto
 func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	// 1. 전역 변수 설정
@@ -44,7 +41,7 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	L = float64(in_L)
 	r = float64(in_r)
 
-	// 2. 파라미터 로드 (컨트롤러, offline 코드와 동일한 파라미터 설정 !!)
+	// Set same params as offline.go and controller.go
 	var err error
 	params, err = rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
@@ -54,24 +51,20 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	}
 	ringQ = params.RingQ()
 
-	// 3. Tau 동적 계산 (입력받은 차원 중 가장 큰 값 기준)
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau = int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	// 4. 키 로드
+	// Key Load
 	loadDir := "../controller/enc_data"
 	sk := new(rlwe.SecretKey)
 	if err := fileutils.ReadRT(filepath.Join(loadDir, "sk.dat"), sk); err != nil {
 		panic("Key Load Fail: " + err.Error())
 	}
 
-	// 5. 암호화기 생성
 	encryptor = rlwe.NewEncryptor(params, sk)
 	decryptor = rlwe.NewDecryptor(params, sk)
 }
 
-// [변경] 실수 배열 포인터와 길이를 받음 (Generic Encrypt)
-//
 //export EncryptVector
 func EncryptVector(valuesPtr *C.double, length C.int, sizePtr *C.int) *C.char {
 	// 1. C 배열 -> Go 슬라이스로 변환 (복사 없이 참조)
@@ -96,10 +89,6 @@ func EncryptVector(valuesPtr *C.double, length C.int, sizePtr *C.int) *C.char {
 	return (*C.char)(C.CBytes(data))
 }
 
-// [변경] 복호화 후 배열 반환 (길이는 전역변수 m 사용 가능하지만, 인자로 받아도 됨)
-// 여기서는 편의상 m(입력차원) 만큼 복호화한다고 가정하거나,
-// DecryptU 처럼 특정 용도라면 m을 사용. 범용성을 위해 요청한 크기(outLen)만큼 반환.
-//
 //export DecryptVector
 func DecryptVector(dataPtr unsafe.Pointer, dataLen C.int, outLen C.int) *C.double {
 	data := C.GoBytes(dataPtr, dataLen)
@@ -109,20 +98,18 @@ func DecryptVector(dataPtr unsafe.Pointer, dataLen C.int, outLen C.int) *C.doubl
 		return nil
 	}
 
-	// 복호화 (요청한 outLen 만큼)
+	// Decrypt and decode
 	targetDim := int(outLen)
 	decVec := RLWE.DecUnpack(ctPack, targetDim, tau, *decryptor, r*s*s*L, ringQ, params)
 
-	// C 메모리 할당
+	// C memory allocation
 	res := (*C.double)(C.malloc(C.size_t(8 * targetDim))) // 8 bytes * N
 
-	// Go 슬라이스 -> C 배열 복사
-	// (unsafe pointer 연산으로 순회하며 대입)
+	// Go Slice -> C array
 	start := unsafe.Pointer(res)
 	size := unsafe.Sizeof(float64(0))
 
 	for i := 0; i < targetDim; i++ {
-		// res[i] 주소 계산
 		ptr := unsafe.Pointer(uintptr(start) + uintptr(i)*size)
 		*(*float64)(ptr) = 0.0
 		if i < len(decVec) {

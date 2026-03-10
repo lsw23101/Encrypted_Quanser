@@ -181,7 +181,6 @@ def run_plant_simulation():
                 # -----------------------------------------------------
                 # 1. Output y 측정 (현재 상태 기준)
                 # -----------------------------------------------------
-                # Using class method (returns list)
                 y = plant.get_output()
 
                 # -----------------------------------------------------
@@ -199,19 +198,16 @@ def run_plant_simulation():
                 # -----------------------------------------------------
                 # 4. Pack [y | u] -> Encrypt -> Send
                 # -----------------------------------------------------
-                # y(길이 2) 뒤에 u(길이 1)를 붙임 => 길이 3 벡터
                 combined_vec = y + u 
-                
-                # combined 벡터 암호화
                 combined_bytes = encrypt_helper(combined_vec)
-                
-                # 전송 (한 번만 보냄!)
+
+
+                # send
                 send_packet(client_socket, combined_bytes)
 
                 # -----------------------------------------------------
                 # 5. Plant State Update
                 # -----------------------------------------------------
-                # Using class method
                 plant.state_update(u)
 
                 t_loop_total = (time.perf_counter() - t_loop_start) * 1000
@@ -225,7 +221,7 @@ def run_plant_simulation():
 
             print("--- Simulation Finished ---")
             
-            # CSV 저장
+            # CSV save
             with open('sim_data/plant_data_python.csv', 'w', newline='') as f:
                 writer = csv.writer(f)
                 header = ['iter'] + [f'y{k}' for k in range(N_OUTPUT)] + [f'u{k}' for k in range(N_INPUT)]
