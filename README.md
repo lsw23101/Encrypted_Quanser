@@ -8,10 +8,10 @@ See demonstration video !
 https://www.youtube.com/shorts/artZGFfgOVo
 
 
-### 0. CDSL Library
+### 00_CDSL
 * **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.
 
-### 1. Quanser Implementation
+### 01_Encrypted Control
 Applies the CDSL encrypted control library to actual Quanser hardware. 
 * **Communication Optimization:** Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
 * **Core Modules:**
@@ -22,31 +22,7 @@ Applies the CDSL encrypted control library to actual Quanser hardware.
 * **Performance:** Operates reliably at a **20ms sampling time**. Achieved a 100% success rate (10/10 runs) maintaining control for over 1 minute (provided hardware wiring is properly managed to avoid swing-up interference).
 * **Future Work:** Plan to integrate implementations from other research groups beyond the current Lattigo-based framework.
 
-### 2. Data-Driven Control
-Modules dedicated to data-driven control methodologies.
-* Contains scripts for system data acquisition.
-* Utilizes the collected data to design controllers (e.g., pole placement) and run simulations.
-* Successfully validated the data-driven controllers on the physical hardware.
-
-### 3. Enc_Control (Experimental Testing)
-An experimental testbed for evaluating RGSW and RLWE schemes at faster sampling times (10ms and 5ms).
-* **Current Setup:** Communication is handled in plaintext. The entire process (Encryption -> Computation -> Decryption) is executed locally within the controller code to measure pure computational overhead.
-* **Known Issues:** Encountered occasional value spikes (glitches) that lead to system instability and loss of control.
-* **TODO:**
-  - [ ] Identify and resolve the root cause of the unexpected value spikes.
-  - [ ] Implement and test an RCF (Rational Controller Form) based controller under the same high-speed conditions.
-
-### 4. Swing-up Control
-Focuses on the nonlinear dynamics and swing-up logic for the rotary inverted pendulum.
-* Designed a simulation environment in MATLAB using dynamic equations with matching hardware parameters.
-* `swing.py` deploys this validated logic onto the actual hardware.
-* Successfully achieved automated swing-up at a **20ms sampling time**, using parameter `mu = 150` and a **6V voltage limit**.
-* **Known Issues:** Swing-up logic fails at slower sampling rates (e.g., 50ms) and requires parameter retuning.
-* **TODO:**
-  - [ ] Achieve successful swing-up at slower sampling times.
-  - [ ] Replace the current basic switching logic with a more advanced and robust algorithm.
-
-### 5. System Models & Parameters
+### 02_Modeling
 Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
 * Includes parameter comparisons and dynamic models for both Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
 * Stores the baseline controller designs and the `local.py` script for local hardware testing.
