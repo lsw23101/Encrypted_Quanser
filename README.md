@@ -22,8 +22,6 @@ Applies the CDSL encrypted control library to actual Quanser hardware.
   * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
   * `plant/real.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
   * `plant/simulation.py`: Simulation environment for debugging purposes.
-* **Performance:** Operates reliably at a **20ms sampling time**. Achieved a 100% success rate (10/10 runs) maintaining control for over 1 minute (provided hardware wiring is properly managed to avoid swing-up interference).
-* **Future Work:** Plan to integrate implementations from other research groups beyond the current Lattigo-based framework.
 
 ### 02_Modeling
 Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
