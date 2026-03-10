@@ -69,6 +69,9 @@ poles = [0,1,2,-1]; % Must consist of n-integers!
 R = place(F.',H.',poles);
 R = R.';
 
+
+
+
 % Convert to modal canonical form
 sys = ss(F-R*H, G, H, []);
 [csys,T] = canon(sys, 'companion');
@@ -78,104 +81,59 @@ G_ = T*G
 H_ = H/T
 
 
-
-
-%% 시뮬
-
-
-
-
-
-
-%% [추가] 시뮬레이션 검증
-fprintf('\n======================================================\n');
-fprintf('      [Simulation] 제어 성능 및 등가성 검증\n');
-fprintf('======================================================\n');
-
-% 1. 시뮬레이션 설정
 T_sim = 1;              % 시뮬레이션 시간 (초)
 N_sim = round(T_sim/Ts); % 총 스텝 수
 t = (0:N_sim-1) * Ts;    % 시간 축
 
-% 초기 상태 설정 (Initial Condition)
-% [Tank1; Tank2; Tank3; Tank4]
-x0 = [10; 10; 0; 0]; % 0이 아닌 초기값에서 0으로 수렴하는지 확인
+x0 = [10; 10; 0; 0]; %
 
-% 데이터 저장용 변수 초기화
 % Case 1: Original (F, G, H)
 x_std = zeros(n, N_sim);
 xhat_std = zeros(n, N_sim);
 u_std = zeros(m, N_sim);
 x_std(:, 1) = x0;
-xhat_std(:, 1) = zeros(n, 1); % 옵저버는 0에서 시작 (추정 오차 확인용)
+xhat_std(:, 1) = zeros(n, 1); 
 
 % Case 2: Transformed (F_, G_, H_, R_)
 x_trans = zeros(n, N_sim);
-z_trans = zeros(n, N_sim); % 변환된 상태 z = T*xhat
+z_trans = zeros(n, N_sim); %  z = T*xhat
 u_trans = zeros(m, N_sim);
 x_trans(:, 1) = x0;
 z_trans(:, 1) = zeros(n, 1);
 
-%% 2. 시뮬레이션 루프
 for k = 1:N_sim-1
-    %% --- Case 1: Standard Controller ---
-    % 1. 측정 (Output Measurement)
+
     y_k = C * x_std(:, k);
     
-    % 2. 제어 입력 계산 (u = H * xhat)
-    % 주의: 위 코드에서 K = -K(LQR)로 부호가 반전되었고 H=K 이므로,
-    % u = H * xhat이 올바른 Negative Feedback입니다.
     u_std(:, k) = H * xhat_std(:, k);
-    
-    % 3. 실제 플랜트 업데이트 (Physics)
+
     x_std(:, k+1) = A * x_std(:, k) + B * u_std(:, k);
-    
-    % 4. 옵저버 업데이트 (xhat_next = F*xhat + G*y)
+
     xhat_std(:, k+1) = F * xhat_std(:, k) + G * y_k;
     
-    %% --- Case 2: Transformed Controller (F_, G_, H_, R_) ---
-    % 1. 측정
+
     y_k_trans = C * x_trans(:, k);
-    
-    % 2. 제어 입력 계산 (u = H_ * z)
-    % 변환된 도메인(z)에서 계산하지만 실제 u값은 물리적으로 동일해야 함
+
     u_trans(:, k) = H_ * z_trans(:, k);
     
-    % 3. 실제 플랜트 업데이트
+
     x_trans(:, k+1) = A * x_trans(:, k) + B * u_trans(:, k);
     
-    % 4. 변환된 옵저버 업데이트 (z_next = F_*z + G_*y + R_*u)
-    % 이것이 (F-RH) 구조를 이용한 업데이트 식입니다.
     z_trans(:, k+1) = F_ * z_trans(:, k) + G_ * y_k_trans + R_ * u_trans(:, k);
 end
 
-% 마지막 스텝 입력 계산 (플롯용)
 u_std(:, end) = H * xhat_std(:, end);
 u_trans(:, end) = H_ * z_trans(:, end);
 
-%% 3. 결과 분석 및 플롯
 % 오차 계산
 ctrl_diff_norm = norm(u_std - u_trans);
 state_diff_norm = norm(x_std - x_trans);
 
-fprintf('>> 시뮬레이션 완료.\n');
-fprintf('>> Case 1 vs Case 2 제어 입력 오차(Norm): %.4e\n', ctrl_diff_norm);
-fprintf('>> Case 1 vs Case 2 상태 궤적 오차(Norm): %.4e\n', state_diff_norm);
-
-if ctrl_diff_norm < 1e-10
-    fprintf('>> 결과: 두 제어 시스템은 완벽하게 등가(Equivalent)입니다.\n');
-else
-    fprintf('>> 경고: 두 시스템 간에 오차가 존재합니다.\n');
-end
-
-% 그래프 그리기
 figure('Color', 'w', 'Position', [100, 100, 1000, 600]);
 
-% (1) 상태 변수 비교 (State Response)
 subplot(2,2,[1 3]);
 plot(t, x_std(1,:), 'r-', 'LineWidth', 2, 'DisplayName', 'x1 (Std)'); hold on;
 plot(t, x_std(2,:), 'b-', 'LineWidth', 2, 'DisplayName', 'x3 (Std)');
-% Transformed 결과는 점선으로 겹쳐서 그림
 plot(t, x_trans(1,:), 'ko', 'MarkerSize', 4, 'DisplayName', 'x1 (Trans)');
 plot(t, x_trans(2,:), 'gx', 'MarkerSize', 4, 'DisplayName', 'x3 (Trans)');
 grid on; xlabel('Time (s)'); ylabel('State Value');
@@ -184,7 +142,6 @@ legend('Location', 'best');
 
 
 
-% (2) 제어 입력 비교 (Control Input)
 subplot(2,2,2);
 plot(t, u_std(1,:), 'r-', 'LineWidth', 2, 'DisplayName', 'u (Std)'); hold on;
 plot(t, u_trans(1,:), 'k--', 'LineWidth', 2, 'DisplayName', 'u (Trans)');
@@ -192,9 +149,8 @@ grid on; xlabel('Time (s)'); ylabel('Voltage (V)');
 title('Control Input Comparison');
 legend('Location', 'best');
 
-% (3) 옵저버 추정 오차 (Estimation Error)
 subplot(2,2,4);
-est_error = x_std - xhat_std; % 실제 x와 추정 xhat 차이
+est_error = x_std - xhat_std; 
 plot(t, est_error(1,:), 'm', 'DisplayName', 'e1'); hold on;
 plot(t, est_error(3,:), 'c', 'DisplayName', 'e3');
 grid on; xlabel('Time (s)'); ylabel('Error');
@@ -235,7 +191,6 @@ function print_numpy(name, M, prec)
     fmt = ['%0.' num2str(prec) 'f'];
 
     if isvector(M)
-        % 1D 벡터는 한 줄로 출력 (예: H)
         fprintf('%s = np.array([ ', name);
         for k = 1:numel(M)
             fprintf(fmt, M(k));
@@ -243,7 +198,6 @@ function print_numpy(name, M, prec)
         end
         fprintf(' ], dtype=np.float64)  # shape (%d,)\n\n', numel(M));
     else
-        % 2D 행렬은 행 단위로 출력 (예: F, G)
         fprintf('%s = np.array([\n', name);
         for i = 1:size(M,1)
             fprintf('    [ ');
@@ -281,7 +235,6 @@ print_go('HBar', round(H_*1000), 0);
 print_go('RBar', round(R_*1000), 0);
 
 
-%% [유틸리티 함수] Go 포맷 출력기
 function print_go(name, M, prec)
     if nargin < 3, prec = 4; end
     fmt = ['%0.' num2str(prec) 'f'];

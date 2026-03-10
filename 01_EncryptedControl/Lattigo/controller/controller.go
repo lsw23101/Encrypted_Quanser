@@ -22,7 +22,7 @@ import (
 
 // Lattigo 데이터 송수신 함수들...
 
-// 데이터 전송: [Length(4bytes)][Payload...]
+// 데이터 전송
 func writeCiphertext(conn net.Conn, ct *rlwe.Ciphertext) error {
 	data, err := ct.MarshalBinary()
 	if err != nil {
@@ -44,7 +44,7 @@ func writeCiphertext(conn net.Conn, ct *rlwe.Ciphertext) error {
 	return nil
 }
 
-// 데이터 수신: [Length(4bytes)] 읽고 -> [Payload] 읽기
+// 데이터 수신
 func readCiphertext(conn net.Conn) (*rlwe.Ciphertext, error) {
 	// 1. 길이 읽기
 	lenBuf := make([]byte, 4)
@@ -78,8 +78,7 @@ func main() {
 	})
 	ringQ := params.RingQ()
 
-	// 차원 설정
-	// 이거 차원 맞춰주기 시스템 바뀌면 입력 m 출력 p
+	// 차원 설정 input:m output:p state:n
 	n, m, p := 4, 1, 2
 
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
@@ -96,7 +95,6 @@ func main() {
 	// Each coefficient in the polynomial is sampled according to a
 	// discrete Gaussian distribution with standard deviation 3.2 and bound 19.2
 	fmt.Println("Error distribution (Discrete Gaussian):", params.Xe())
-
 
 	// Monomials 생성 for unpack
 	logn := int(math.Log2(float64(tau)))

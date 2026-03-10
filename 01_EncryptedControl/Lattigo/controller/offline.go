@@ -5,11 +5,8 @@ import (
 	"math"
 	"path/filepath"
 
-	// 1. 기존 CDSL 라이브러리 유틸 (수학 연산 등) -> "utils"라는 이름으로 사용
 	utils "github.com/CDSL-EncryptedControl/CDSL/utils"
 
-	// 2. [추가] 우리가 방금 만든 파일 저장용 유틸 -> "fileutils"라는 별명으로 사용!
-	// (폴더 경로가 python_test/utils 라고 가정)
 	fileutils "github.com/CDSL-EncryptedControl/CDSL/Lattigo/utils"
 
 	RGSW "github.com/CDSL-EncryptedControl/CDSL/utils/core/RGSW"
@@ -19,9 +16,9 @@ import (
 )
 
 func main() {
-	fmt.Println("--- [Offline Phase] Generating Keys & Encrypting Matrices ---")
+	fmt.Println("--- Offline Phase ---")
 
-	// 1. 파라미터 설정 (controller, crypto 파일의 파라미터와 동일하게 설정!!)
+	// RLWE params
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    12,
 		LogQ:    []int{60},
@@ -29,13 +26,13 @@ func main() {
 		NTTFlag: true,
 	})
 
-	// Quantization parameters
+	// Quantization params
 	s := 1 / 1000.0
 	L := 1 / 1000000.0
 	r := 1 / 1000.0
 	fmt.Printf("Params: LogN=%d, 1/r=%.1f, 1/s=%.1f, 1/L=%.1f\n", params.LogN(), 1/r, 1/s, 1/L)
 
-	// 2. 제어기 모델
+	// Contoller
 	// F (integer matrix !)
 	F := [][]float64{
 		{0.0000, -0.0000, -0.0000, -0.0000},
@@ -43,7 +40,6 @@ func main() {
 		{-0.0000, 1.0000, 0.0000, 1.0000},
 		{0.0000, -0.0000, 1.0000, 2.0000},
 	}
-
 
 	GBar := [][]float64{
 		{1000, -2439},
@@ -63,30 +59,25 @@ func main() {
 		{-452},
 	}
 
-
-	// Initial State (4x1) - plant.py의 초기값과 맞춰줌 (예: 각도만 0.1)
+	// Controller Initial State
 	x_ini := []float64{0.0, 0.0, 0.0, 0.0}
 
-	// 차원 계산
-	// n := len(F)
-	// m := len(H)
-	// p := len(G[0])
+	// Dimensions input:m output:p state:n
 	n := 4
-	m := 1 // <-- 여기가 1이어야 함
+	m := 1
 	p := 2
 
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	// Galois Elements 계산
+	// Galois Elements
 	logn := int(math.Log2(float64(tau)))
 	galEls := make([]uint64, logn)
 	for i := 0; i < logn; i++ {
 		galEls[i] = uint64(tau/int(math.Pow(2, float64(i))) + 1)
 	}
 
-	// 3. 키 생성
-	fmt.Println(">> Generating Keys...")
+	// Key Generation
 	kgen := rlwe.NewKeyGenerator(params)
 	sk := kgen.GenSecretKeyNew()
 	rlk := kgen.GenRelinearizationKeyNew(sk)
@@ -99,10 +90,7 @@ func main() {
 	levelQ := params.QCount() - 1
 	levelP := params.PCount() - 1
 
-	// 4. 행렬 암호화
-	fmt.Println(">> Encrypting Matrices (This may take a while)...")
-
-	// // Scaling Matrices (여기 utils는 CDSL 라이브러리)
+	// Scaling (CDSL library)
 	// GBar := utils.ScalMatMult(1/s, G)
 	// HBar := utils.ScalMatMult(1/s, H)
 	// RBar := utils.ScalMatMult(1/s, R)
@@ -113,12 +101,11 @@ func main() {
 	ctH := RGSW.EncPack(HBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctR := RGSW.EncPack(RBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 
-	// 5. 초기 상태 암호화
-	fmt.Println(">> Encrypting Initial State...")
+	// Initial State Encryption
 	xBar := utils.RoundVec(utils.ScalVecMult(1/(r*s), x_ini))
 	xCtPack := RLWE.EncPack(xBar, tau, 1/L, *encryptorRLWE, ringQ, params)
 
-	// 6. 파일 저장
+	// save directory for offline data
 	saveDir := "enc_data"
 
 	// [변경] 여기서부터는 fileutils (우리가 만든 파일 유틸)를 사용합니다.
