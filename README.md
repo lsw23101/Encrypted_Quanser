@@ -1,8 +1,6 @@
 # SeoulTech Encrypted Control on Quanser
 
-This repository contains the implementation of encrypted control algorithms for the Quanser Qube Servo 3 (Rotary Inverted Pendulum).  
-
-(00, 01 for Encyrpted Control and 02-05 for studying)
+This repository contains the implementation of encrypted control for the Quanser Qube Servo 3 (Rotary Inverted Pendulum).  
 
 See demonstration video !
 https://www.youtube.com/shorts/artZGFfgOVo
