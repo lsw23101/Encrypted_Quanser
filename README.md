@@ -15,8 +15,9 @@ https://github.com/CDSL-EncryptedControl/CDSL
 
 
 ### 01_Encrypted Control
-Applies the CDSL encrypted control library to actual Quanser hardware. 
-* **Communication Optimization:** Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
+Applies the CDSL encrypted control library to actual Quanser hardware.  
+Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.  
+
 * **Core Modules:**
   * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
   * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
