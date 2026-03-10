@@ -9,7 +9,7 @@ https://www.youtube.com/shorts/artZGFfgOVo
 
 
 ### 00_CDSL: Cryptography for Dynamic Systems Library
-* **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.
+* **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.  
 
 https://github.com/CDSL-EncryptedControl/CDSL
 
