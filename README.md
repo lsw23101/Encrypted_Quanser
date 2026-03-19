@@ -16,11 +16,19 @@ https://github.com/CDSL-EncryptedControl/CDSL
 Applies the CDSL encrypted control library to actual Quanser hardware.  
 Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.  
 
-* **Core Modules:**
-  * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
-  * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
-  * `plant/manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
-  * `plant/simulation.py`: Simulation environment for debugging purposes.
+* **Go:**
+  * **Lattigo**  
+   * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
+   * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
+   * `plant/manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
+   * `plant/simulation.py`: Simulation environment for debugging purposes.
+  * **Plaintext**
+   * plant: TBD
+   * Controller: TBD
+      
+* **Python:**
+  * TBD
+
 
 ### 02_Modeling
 Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
