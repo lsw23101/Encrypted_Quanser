@@ -31,14 +31,14 @@ Utilizes a re-encryption method combined with time scheduling to ensure only a s
     * crypto: biuld files to use Lattigo in Python
       
   * **Plaintext**
-    * plant: TBD
-      * `plant.py`: 
-    * controller: TBD
-      * `controller.go`:
+    * plant
+      * `plant.py`: TBD 
+    * controller
+      * `controller.go`: TBD
       
 * **Python:**
   * **Plaintext** 
-    * plant: TBD
+    * plant
       * `plant.py`: TBD, same as Go
     * controller
       * `controller.py`: TBD, include TCP into local.py (find workspace files...)
