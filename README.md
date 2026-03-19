@@ -20,8 +20,8 @@ Utilizes a re-encryption method combined with time scheduling to ensure only a s
   * **Lattigo**  
     * controller
       * `controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
-      * `offline.go`
-      * `conversion.m`
+      * `offline.go`: Restore encrypted RGSW matrices, RLWE initial state and some evaluation keys.
+      * `conversion.m`: Design re-encryption based controller (F, G, H, R).
         
     * plant
       * `swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
@@ -40,6 +40,7 @@ Utilizes a re-encryption method combined with time scheduling to ensure only a s
   * **Plaintext** 
     * plant
       * `plant.py`: TBD, same as Go
+      * `local.py`: combinded Plant and Controller
     * controller
       * `controller.py`: TBD, include TCP into local.py (find workspace files...)
         
