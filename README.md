@@ -18,18 +18,31 @@ Utilizes a re-encryption method combined with time scheduling to ensure only a s
 
 * **Go:**
   * **Lattigo**  
-    * `controller/controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
-    * `plant/swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
-    * `plant/manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
-    * `plant/simulation.py`: Simulation environment for debugging purposes.
+    * controller
+      * `controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
+      * `offline.go`
+      * `conversion.m`
+        
+    * plant
+      * `swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
+      * `manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
+      * `simulation.py`: Simulation environment for debugging purposes.
+        
+    * crypto: biuld files to use Lattigo in Python
+      
   * **Plaintext**
     * plant: TBD
-    * Controller: TBD
+      * `plant.py`: 
+    * controller: TBD
+      * `controller.go`:
       
 * **Python:**
-  * TBD
-
-
+  * **Plaintext** 
+    * plant: TBD
+      * `plant.py`: TBD, same as Go
+    * controller
+      * `controller.py`: TBD, include TCP into local.py (find workspace files...)
+        
 ### 02_Modeling
 Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
 * Includes parameter comparisons and dynamic models for both Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
