@@ -13,36 +13,32 @@ https://github.com/CDSL-EncryptedControl/CDSL
 
 
 ### 01_Encrypted Control
-Applies the CDSL encrypted control library to actual Quanser hardware.  
-Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.  
+Applies the CDSL encrypted control library to actual Quanser hardware.
+Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
+
+Plant and controller communicate via **TCP** (single PC, split processes).
 
 * **Go:**
-  * **Lattigo**  
+  * **Lattigo** — Encrypted controller using RLWE/RGSW
     * controller
       * `controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
       * `offline.go`: Restore encrypted RGSW matrices, RLWE initial state and some evaluation keys.
       * `conversion.m`: Design re-encryption based controller (F, G, H, R).
-        
     * plant
-      * `swing.py`: Executes the full hardware sequence: Swing-up -> Full-state LQR (1 sec) -> Encrypted control.
+      * `swing.py`: Executes the full hardware sequence: Swing-up → Full-state LQR (1 sec) → Encrypted control.
       * `manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
       * `simulation.py`: Simulation environment for debugging purposes.
-        
-    * crypto: biuld files to use Lattigo in Python
-      
-  * **Plaintext**
-    * plant
-      * `plant.py`: TBD 
-    * controller
-      * `controller.go`: TBD
-      
+    * crypto: Build files to use Lattigo in Python
+
+  * **Plaintext** — Plaintext baseline (no encryption) with same TCP structure
+    * `controller.go`: Computes $u = Hx_c$, updates state via $x_c' = Fx_c + Gy$, communicates over TCP.
+    * `swing.py` / `manual.py` / `simulation.py`: Same plant-side scripts as Lattigo version.
+
 * **Python:**
-  * **Plaintext** 
-    * plant
-      * `plant.py`: TBD, same as Go
-      * `local.py`: combinded Plant and Controller
-    * controller
-      * `controller.py`: TBD, include TCP into local.py (find workspace files...)
+  * **Plaintext** — Pure Python plaintext baseline with same TCP structure
+    * `controller.py`: Python equivalent of Go/Plaintext controller, communicates over TCP.
+    * `swing.py` / `manual.py` / `simulation.py`: Plant-side scripts.
+    * `local_20ms.py`: Combined plant + controller in a single process (no TCP, for local testing).
         
 ### 02_Modeling
 Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
