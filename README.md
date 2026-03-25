@@ -63,7 +63,10 @@ Quanser Aero 2 (2-DOF helicopter) controllers.
     * `model.m`: Same controller design script as Qlab.
     * `fullstate.py`: Full-state feedback LQR tracking control on physical hardware. Direct encoder/rate measurements (no observer); pitch safety cutoff at ±40°. Tracks step reference (pitch 30°, yaw −30°) flipping at t=10 s.
 
-  ![Reference tracking result — hardware experiment](02_Aero2/Hardware/0325_ref_trac_hardware.png)
+
+<img width="1684" height="1140" alt="0325_ref_trac_hardware" src="https://github.com/user-attachments/assets/bb8e1fc8-dc2e-4c2d-99aa-88fe09063b14" />
+
+
 
 * **quanser_resource** — Quanser official sample scripts
   * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
