@@ -53,22 +53,26 @@ Both contain:
 ### 02_Aero2
 Quanser Aero 2 (2-DOF helicopter) controllers.
 
-Each environment (Qlab virtual / Hardware) is separated:
-
 * **Qlab** — Quanser QLab virtual environment
   * **Python/Plaintext**
     * `model.m`: 4th-order MIMO state-space model and LQR controller design (Fellag et al., 2024). Linearized about hover equilibrium; includes cross-coupling between pitch and yaw channels.
-    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (e.g. pitch ±10°, yaw ∓10°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
+    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (pitch ±10°, yaw ∓10°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
 
   ![Reference tracking result](02_Aero2/Qlab/0325_ref_trac.png)
 
-* **Hardware** — Physical Aero 2 hardware
-  * **Python/Plaintext**
-    * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
-    * `aero2_read_all_sensor_data_task.py`: Read all sensor data in task-based mode.
-    * `aero2_read_all_sensor_data_task_qscope.py`: Sensor data with real-time QScope visualization.
+* **quanser_resource** — Quanser official sample scripts
+  * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
+  * `aero2_read_all_sensor_data_task.py`: Read all sensor data in task-based mode.
+  * `aero2_read_all_sensor_data_task_qscope.py`: Sensor data with real-time QScope visualization.
 
 
 ### 03_Modeling
-Foundational knowledge, dynamic equations, and hardware parameters for the Quanser Qube Servo 3.
-* Includes parameter comparisons and dynamic models for both Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
+Dynamic models and hardware parameters for Quanser platforms.
+
+* **Aero2**
+  * Reference paper: *2-DOF Helicopter Control Via State Feedback and Full/Reduced-Order Observers*
+  * Quanser official lab materials (l0–l9): hardware interfacing, block diagram modeling, rotor step response, pitch parameter estimation, PID design, gain scheduling — each with `digital_twin` and `hardware` versions.
+
+* **Qube_servo3**
+  * State-space models and parameter files for Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
+  * Controller design scripts and Quanser SP5 pendulum modeling lab materials.
