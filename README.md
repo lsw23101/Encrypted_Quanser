@@ -1,22 +1,31 @@
 # SeoulTech Encrypted Control on Quanser
 
-This repository contains the implementation of encrypted control for the Quanser Qube Servo 3 (Rotary Inverted Pendulum).  
+This repository contains the implementation of encrypted control for the Quanser Qube Servo 3 (Rotary Inverted Pendulum) and plaintext baseline controllers for the Quanser Aero 2 (2-DOF Helicopter).
 
 See demonstration video !
 https://www.youtube.com/shorts/artZGFfgOVo
 
-
-### 00_CDSL: Cryptography for Dynamic Systems Library
-* **Reference:** RLWE-based encrypted control algorithms and baseline codes designed by the Control and Dynamics Systems Lab (CDSL) at Seoul National University.  
-
-https://github.com/CDSL-EncryptedControl/CDSL
+> **Reference — CDSL (Cryptography for Dynamic Systems Library)**
+> RLWE-based encrypted control algorithms by the Control and Dynamics Systems Lab (CDSL), Seoul National University.
+> https://github.com/CDSL-EncryptedControl/CDSL
 
 
-### 01_Encrypted Control
-Applies the CDSL encrypted control library to actual Quanser hardware.
+### 00_libraries
+Quanser PAL/HAL/QVL Python libraries and Simulink models for Quanser hardware.
+
+
+### 01_Qube_Servo3
+Applies the CDSL encrypted control library to the Quanser Qube Servo 3 (Rotary Inverted Pendulum).
 Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
 
 Plant and controller communicate via **TCP** (single PC, split processes).
+
+Each environment (Qlab virtual / Hardware) shares the same code structure:
+
+* **Qlab** — Quanser QLab virtual environment
+* **Hardware** — Physical Qube Servo 3 hardware
+
+Both contain:
 
 * **Go:**
   * **Lattigo** — Encrypted controller using RLWE/RGSW
@@ -35,12 +44,31 @@ Plant and controller communicate via **TCP** (single PC, split processes).
     * `swing.py` / `manual.py` / `simulation.py`: Same plant-side scripts as Lattigo version.
 
 * **Python:**
-  * **Plaintext** — Pure Python plaintext baseline with same TCP structure
+  * **Plaintext** — Pure Python plaintext baseline
     * `controller.py`: Python equivalent of Go/Plaintext controller, communicates over TCP.
     * `swing.py` / `manual.py` / `simulation.py`: Plant-side scripts.
     * `local_20ms.py`: Combined plant + controller in a single process (no TCP, for local testing).
-        
-### 02_Modeling
-Contains foundational knowledge, dynamic equations, and hardware parameters required to operate the Quanser Qube Servo 3.
+
+
+### 02_Aero2
+Quanser Aero 2 (2-DOF helicopter) controllers.
+
+Each environment (Qlab virtual / Hardware) is separated:
+
+* **Qlab** — Quanser QLab virtual environment
+  * **Python/Plaintext**
+    * `model.m`: 4th-order MIMO state-space model and LQR controller design (Fellag et al., 2024). Linearized about hover equilibrium; includes cross-coupling between pitch and yaw channels.
+    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (e.g. pitch ±10°, yaw ∓10°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
+
+  ![Reference tracking result](02_Aero2/Qlab/0325_ref_trac.png)
+
+* **Hardware** — Physical Aero 2 hardware
+  * **Python/Plaintext**
+    * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
+    * `aero2_read_all_sensor_data_task.py`: Read all sensor data in task-based mode.
+    * `aero2_read_all_sensor_data_task_qscope.py`: Sensor data with real-time QScope visualization.
+
+
+### 03_Modeling
+Foundational knowledge, dynamic equations, and hardware parameters for the Quanser Qube Servo 3.
 * Includes parameter comparisons and dynamic models for both Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
-* Stores the baseline controller designs and the `local.py` script for local hardware testing.

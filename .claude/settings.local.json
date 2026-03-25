@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp -r \"01_EncryptedControl/Python\" \"01_Qube_Servo3/Python\")",
+      "Bash(rm -rf \"01_EncryptedControl\")",
+      "Bash(cmd.exe /c \"rmdir /s /q C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_EncryptedControl\")",
+      "Bash(cd:*)",
+      "Bash(mkdir:*)",
+      "Bash(cmd.exe /c \"rmdir /s /q C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_EncryptedControl 2>&1 & rmdir /s /q C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\03_Aero2_test 2>&1 & rmdir /s /q C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\10_CDSL 2>&1 & echo done\")",
+      "Bash(cmd.exe /c rmdir /s /q \"C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\10_CDSL\")",
+      "Bash(echo \"10_CDSL: $?\")",
+      "Bash(cmd.exe /c rmdir /s /q \"C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\03_Aero2_test\")",
+      "Bash(echo \"03_Aero2_test: $?\")",
+      "Bash(cmd.exe /c rmdir /s /q \"C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_EncryptedControl\")",
+      "Bash(echo \"01_EncryptedControl: $?\")",
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force 'C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\10_CDSL'; Remove-Item -Recurse -Force 'C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\03_Aero2_test'; Remove-Item -Recurse -Force 'C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_EncryptedControl'; Write-Host 'done'\")",
+      "Bash(mkdir -p Qlab Hardware)",
+      "Bash(cp -r Go Python Qlab/)",
+      "Bash(cp -r Go Python Hardware/)",
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force 'C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_Qube_Servo3\\\\Go'; Remove-Item -Recurse -Force 'C:\\\\Users\\\\sang2\\\\all\\\\2026\\\\Encrypted_Quanser\\\\01_Qube_Servo3\\\\Python'; Write-Host 'done'\")",
+      "Bash(while read:*)",
+      "Bash(do rm:*)",
+      "Bash(done)",
+      "Bash(do rmdir:*)",
+      "Bash(cp -r Python Qlab/)",
+      "Bash(cp -r Python Hardware/)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls C:/Users/sang2/all/2026/Encrypted_Quanser/03_Modeling/Qube_servo3/*.m)",
+      "WebFetch(domain:upcommons.upc.edu)",
+      "WebSearch",
+      "WebFetch(domain:users.encs.concordia.ca)",
+      "WebFetch(domain:www2.ece.ohio-state.edu)",
+      "WebFetch(domain:www.quanser.com)",
+      "WebFetch(domain:www.ri.cmu.edu)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
