@@ -56,9 +56,14 @@ Quanser Aero 2 (2-DOF helicopter) controllers.
 * **Qlab** — Quanser QLab virtual environment
   * **Python/Plaintext**
     * `model.m`: 4th-order MIMO state-space model and LQR controller design (Fellag et al., 2024). Linearized about hover equilibrium; includes cross-coupling between pitch and yaw channels.
-    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (pitch ±10°, yaw ∓10°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
+    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (pitch ±30°, yaw ∓30°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
 
-  ![Reference tracking result](02_Aero2/Qlab/0325_ref_trac.png)
+* **Hardware** — Physical Aero 2 hardware
+  * **Python/Plaintext**
+    * `model.m`: Same controller design script as Qlab.
+    * `fullstate.py`: Full-state feedback LQR tracking control on physical hardware. Direct encoder/rate measurements (no observer); pitch safety cutoff at ±40°. Tracks step reference (pitch 30°, yaw −30°) flipping at t=10 s.
+
+  ![Reference tracking result — hardware experiment](02_Aero2/Hardware/0325_ref_trac_hardware.png)
 
 * **quanser_resource** — Quanser official sample scripts
   * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
