@@ -58,6 +58,10 @@ fprintf('\n=== Controller Matrices ===\n');
 disp('LQR Gain (K) = '); disp(K);
 disp('Feedforward Gain (N_bar) = '); disp(N_bar);
 
+
+
+
+
 F = Ad - Bd*K - L*Cd;
 G = L;
 H = -K;
@@ -66,6 +70,40 @@ disp('F ='); disp(F);
 disp('G ='); disp(G);
 disp('H ='); disp(H);
 
+
+function print_numpy(name, M, prec)
+    if nargin < 3, prec = 4; end
+    fmt = ['%0.' num2str(prec) 'f'];
+
+    if isvector(M)
+        fprintf('%s = np.array([ ', name);
+        for k = 1:numel(M)
+            fprintf(fmt, M(k));
+            if k < numel(M), fprintf(', '); end
+        end
+        fprintf(' ], dtype=np.float64)  # shape (%d,)\n\n', numel(M));
+    else
+        fprintf('%s = np.array([\n', name);
+        for i = 1:size(M,1)
+            fprintf('    [ ');
+            for j = 1:size(M,2)
+                fprintf(fmt, M(i,j));
+                if j < size(M,2), fprintf(', '); end
+            end
+            if i < size(M,1)
+                fprintf(' ],\n');
+            else
+                fprintf(' ]\n');
+            end
+        end
+        fprintf('], dtype=np.float64)\n\n');
+    end
+end
+
+print_numpy('F', F, 4);
+print_numpy('G', G, 4);
+print_numpy('H', H, 4);
+abs(eig(F))
 
 
 %% 4. Simulation Setup
