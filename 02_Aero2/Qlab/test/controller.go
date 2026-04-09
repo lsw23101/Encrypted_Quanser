@@ -19,9 +19,10 @@ const (
 const (
 	HOST            = "localhost"
 	PORT            = "8000"
+	FREQUENCY       = 50
 	VMAX            = 15.0
-	REF_PITCH_RAD   = 10.0 * math.Pi / 180.0
-	REF_YAW_RAD     = -10.0 * math.Pi / 180.0
+	REF_PITCH_RAD   = 30.0 * math.Pi / 180.0
+	REF_YAW_RAD     = -30.0 * math.Pi / 180.0
 	REF_HALF_PERIOD = 10.0 // seconds per half-cycle
 )
 
@@ -164,37 +165,37 @@ func handleControl(conn net.Conn) {
 	defer conn.Close()
 
 	z := make([]float64, N) // observer state, zero init
-	// r은 plant로부터 받은 값을 사용 (독립 계산 안 함 → 불일치 방지)
-	// 초기값은 첫 스텝 전송용 (plant 첫 r과 동일하게 양의 방향)
-	r := []float64{REF_PITCH_RAD, REF_YAW_RAD}
 	iter := 0
 
 	fmt.Println(">> Controller loop started")
 
 	for {
-		// 1. u = H_*z + N_bar*r  (r은 직전 스텝에서 plant가 보낸 값)
-		u := clipVec(vecAdd(matVec(H_, z), matVec(N_bar, r)), VMAX)
 
-		// 2. send u → Plant
-		if err := writeFloats(conn, u); err != nil {
-			fmt.Println("Send error:", err)
-			return
-		}
-
-		// 3. recv (u_applied, y, r_now) = M+L+L = 6 floats from Plant
-		msg, err := readFloats(conn, M+L+L)
+		// 1. recv y = L floats from Plant
+		y, err := readFloats(conn, L)
 		if err != nil {
 			if err != io.EOF {
 				fmt.Println("Recv error:", err)
 			}
 			return
 		}
-		uFb := msg[0:M]          // applied u (safety 후 실제값)
-		y := msg[M : M+L]        // sensor [theta_p, theta_y]
-		r = msg[M+L : M+L+L]     // plant의 현재 reference → 다음 스텝 u에 사용
 
-		// 4. z = F_*z + G_*y + R_*u_fb + P_*r
-		z = vecAdd(matVec(F_, z), matVec(G_, y), matVec(R_, uFb), matVec(P_, r))
+		// 2. 사각파 레퍼런스 (10초 주기)
+		halfCycle := int(float64(iter) / (REF_HALF_PERIOD * FREQUENCY))
+		refSign   := 1.0 - 2.0*float64(halfCycle%2)
+		r         := []float64{refSign * REF_PITCH_RAD, refSign * REF_YAW_RAD}
+
+		// 3. u = H_*z + N_bar*r
+		u := vecAdd(matVec(H_, z), matVec(N_bar, r))
+
+		// 4. send u → Plant
+		if err := writeFloats(conn, u); err != nil {
+			fmt.Println("Send error:", err)
+			return
+		}
+
+		// 5. z = F_*z + G_*y + R_*u + P_*r
+		z = vecAdd(matVec(F_, z), matVec(G_, y), matVec(R_, u), matVec(P_, r))
 
 		if iter%50 == 0 {
 			fmt.Printf("k=%4d | u=[%6.2f, %6.2f] V | y=[%6.2f, %6.2f] deg | r=[%5.1f, %5.1f] deg\n",

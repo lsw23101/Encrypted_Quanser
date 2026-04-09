@@ -1,16 +1,15 @@
-## manual.py
+## plant.py
 # Aero2 Plant side — Encrypted TCP controller (Go Lattigo)
+# 실행: controller/ 폴더에서  python plant.py
 #
 # 통신 흐름 (매 스텝):
 #   1. recv u_enc    (Controller → Plant)  암호문 패킷
-#   2. decrypt u     → [V_main, V_tail]  (Go 공유 라이브러리)
-#   3. apply u       (write_voltage)       클리핑은 여기서만 수행
+#   2. decrypt u     → [V_main_raw, V_tail_raw]
+#   3. apply u       (write_voltage)       클리핑은 여기서만
 #   4. read sensor   (hardware tick @ 50Hz)
-#   5. reenc([y, u]) (EncryptVector)       [theta_p, theta_y, V_main_raw, V_tail_raw]
+#   5. reenc([theta_p, theta_y, u[0], u[1]])
 #   6. send combined (Plant → Controller) 암호문 패킷
-#
-#   ※ r은 controller.go 내부에서 평문으로 계산
-#   ※ 클리핑 전 원본 u 를 y와 함께 재암호화 → controller state 업데이트 정확성 보장
+#   ※ r 계산은 controller.go 내부, 클리핑 전 u 를 재암호화
 # -----------------------------------------------------------------------
 
 import sys
@@ -24,15 +23,18 @@ import numpy as np
 from threading import Thread
 
 # ── Quanser Library ──────────────────────────────────────────────────────
+# controller/ → Lattigo → Go → Qlab → 02_Aero2 → Encrypted_Quanser
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', '..', '..', '..', '..', '00_libraries', 'python'))
 from pal.products.aero2 import Aero2
 from pal.utilities.scope import MultiScope
 
 # ── Go 암호화 공유 라이브러리 ────────────────────────────────────────────
-lib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'crypto', 'client_crypto.so')
+# controller/ → ../crypto/
+_base    = os.path.dirname(os.path.abspath(__file__))
+lib_path = os.path.join(_base, '..', 'crypto', 'client_crypto.so')
 if os.name == 'nt':
-    dll_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'crypto', 'client_crypto.dll')
+    dll_path = os.path.join(_base, '..', 'crypto', 'client_crypto.dll')
     if os.path.exists(dll_path):
         lib_path = dll_path
 
@@ -43,9 +45,9 @@ except OSError as e:
     print(f"[Error] 라이브러리 로드 실패: {e}")
     exit(1)
 
-lib.InitCrypto.argtypes  = [ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                             ctypes.c_double, ctypes.c_double, ctypes.c_double]
-lib.InitCrypto.restype   = None
+lib.InitCrypto.argtypes    = [ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_double, ctypes.c_double, ctypes.c_double]
+lib.InitCrypto.restype     = None
 lib.EncryptVector.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_int,
                                ctypes.POINTER(ctypes.c_int)]
 lib.EncryptVector.restype  = ctypes.POINTER(ctypes.c_char)
@@ -57,20 +59,24 @@ lib.FreePtr.restype        = None
 # ── Run parameters ──────────────────────────────────────────────────────
 RUN_TIME    = 50.0
 FREQUENCY   = 50
-Ts          = 1.0 / FREQUENCY
 VMAX        = 15.0
 PITCH_LIMIT = np.deg2rad(40)
 
-# Aero2: state n=4, input m=2, output p=2 — offline.go 와 동일
+# Aero2: n=4, m=2, p=2 — offline.go 와 동일
 N_STATE, N_INPUT, N_OUTPUT = 4, 2, 2
 VAL_S = 1.0 / 1000.0
 VAL_L = 1.0 / 1000000.0
 VAL_R = 1.0 / 1000.0
 
-# ── Reference (scope 표시용, 실제 r 계산은 controller.go 내부) ──────────
-REF_PITCH_DEG =  30.0
-REF_YAW_DEG   = -30.0
-r_disp = np.array([np.deg2rad(REF_PITCH_DEG), np.deg2rad(REF_YAW_DEG)])
+# scope 표시용 레퍼런스 (실제 계산은 controller.go 내부)
+r_disp = np.array([np.deg2rad(30.0), np.deg2rad(-30.0)])
+
+# ── Kill flag ────────────────────────────────────────────────────────────
+KILL_THREAD = False
+def sig_handler(*args):
+    global KILL_THREAD
+    KILL_THREAD = True
+signal.signal(signal.SIGINT, sig_handler)
 
 # ── TCP helpers ──────────────────────────────────────────────────────────
 def recv_exact(sock, n):
@@ -108,13 +114,6 @@ def decrypt_helper(data_bytes, out_len):
     lib.FreePtr(ptr)
     return res
 
-# ── Kill flag ────────────────────────────────────────────────────────────
-KILL_THREAD = False
-def sig_handler(*args):
-    global KILL_THREAD
-    KILL_THREAD = True
-signal.signal(signal.SIGINT, sig_handler)
-
 # ── Scope ────────────────────────────────────────────────────────────────
 scope = MultiScope(rows=3, cols=2, title='Aero2 Encrypted Controller', fps=30)
 
@@ -140,17 +139,12 @@ scope.axes[5].attachSignal(name='V_tail')
 
 # ── Control loop ─────────────────────────────────────────────────────────
 def control_loop():
-    HOST = '127.0.0.1'
-    PORT = 8000
-
     lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
-    print(f"[Info] InitCrypto: n={N_STATE}, m={N_INPUT}, p={N_OUTPUT}, "
-          f"s={VAL_S}, L={VAL_L}, r={VAL_R}")
 
     myAero2   = Aero2(id=0, hardware=0, readMode=0, frequency=FREQUENCY)
     startTime = time.time()
     timestamp = 0.0
-    theta_p   = 0.0  # 첫 스텝 안전 체크용 초기값
+    theta_p   = 0.0  # 첫 스텝 안전 체크용
 
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -158,7 +152,7 @@ def control_loop():
 
             while not KILL_THREAD:
                 try:
-                    sock.connect((HOST, PORT))
+                    sock.connect(('127.0.0.1', 8000))
                     print(">> Connected to Controller!")
                     break
                 except ConnectionRefusedError:
@@ -166,19 +160,17 @@ def control_loop():
 
             while timestamp < RUN_TIME and not KILL_THREAD:
 
-                # ── 1. recv u_enc (Controller → Plant) ───────────────────
+                # 1. recv u_enc (controller가 먼저 전송)
                 u_enc_bytes = recv_packet(sock)
                 if u_enc_bytes is None:
                     break
 
-                # ── 2. 복호화: u → [V_main_raw, V_tail_raw] ──────────────
+                # 2. 복호화 → [V_main_raw, V_tail_raw]
                 u = decrypt_helper(u_enc_bytes, N_INPUT)
                 if u is None:
                     break
 
-                # ── 3. 클리핑 & 하드웨어 적용 ─────────────────────────────
-                #       클리핑은 오직 write_voltage 직전에서만 수행
-                #       재암호화에는 클리핑 전 원본 u 사용
+                # 3. 클리핑 & 하드웨어 적용 (클리핑은 오직 여기서만)
                 V_main = float(np.clip(u[0], -VMAX, VMAX))
                 V_tail = float(np.clip(u[1], -VMAX, VMAX))
 
@@ -188,23 +180,22 @@ def control_loop():
 
                 myAero2.write_voltage(V_main, V_tail)
 
-                # ── 4. 센서 읽기 (50Hz 하드웨어 틱 블로킹) ────────────────
+                # 4. 센서 읽기 (50Hz 하드웨어 틱 블로킹)
                 myAero2.read_analog_encoder_other_channels()
                 theta_p = myAero2.pitchAngle
                 theta_y = myAero2.yawAngle
                 dp_meas = myAero2.pitchRate
                 dy_meas = myAero2.yawRate
 
-                # ── 5. 재암호화: [y, u_raw] = [theta_p, theta_y, u[0], u[1]] ──
-                #       controller 는 이를 unpack → yCt[:p], uReEncUnpacked[p:]
-                #       u 는 클리핑 전 원본 사용 (state 업데이트 정확도)
-                combined_vec   = [theta_p, theta_y, u[0], u[1]]
-                combined_bytes = encrypt_helper(combined_vec)
+                # 5. 재암호화: [y | u_raw] = [theta_p, theta_y, u[0], u[1]]
+                #    controller 언패킹: yCt = [:2], uReEnc = [2:]
+                #    클리핑 전 원본 u 사용 → state 업데이트 정확도 보장
+                combined_bytes = encrypt_helper([theta_p, theta_y, u[0], u[1]])
 
-                # ── 6. send combined (Plant → Controller) ────────────────
+                # 6. send combined → Controller
                 send_packet(sock, combined_bytes)
 
-                # ── 7. Scope ─────────────────────────────────────────────
+                # 7. Scope
                 scope.axes[0].sample(timestamp, [np.rad2deg(theta_p), np.rad2deg(r_disp[0])])
                 scope.axes[1].sample(timestamp, [np.rad2deg(theta_y), np.rad2deg(r_disp[1])])
                 scope.axes[2].sample(timestamp, [np.rad2deg(dp_meas)])

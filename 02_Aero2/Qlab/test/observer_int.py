@@ -137,6 +137,8 @@ def control_loop():
             dy_meas = myAero2.yawRate
 
             y = np.array([theta_p, theta_y], dtype=np.float64)
+            
+            print(y)
 
             # ── 2. 사각파 레퍼런스 ───────────────────────────────────────
             ref_sign = 1 - 2 * (int(timestamp / REF_HALF_PERIOD) % 2)
@@ -167,7 +169,7 @@ def control_loop():
 
             # ── 7. 옵저버 State Update (정수행렬) ────────────────────────
             # z(k+1) = F_*z + G_*y + R_*u + P_*r
-            z = F_ @ z + G_ @ y + R_ @ u_vec + P_ @ ref_now
+            z = F_ @ z + G_ @ y + R_ @ u_ctrl + P_ @ ref_now
 
             # ── 8. Timing ────────────────────────────────────────────────
             elapsed = time.perf_counter() - loop_start

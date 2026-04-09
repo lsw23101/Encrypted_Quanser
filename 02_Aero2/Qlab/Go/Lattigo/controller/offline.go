@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	fmt.Println("--- Offline Phase ---")
+	fmt.Println("--- Offline Phase (Aero2) ---")
 
 	// RLWE params
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
@@ -27,48 +27,69 @@ func main() {
 	})
 
 	// Quantization params
+	// y [rad], u [V] → 각각 1/r, 1/s 로 스케일
+	// xBar = round(x / (r*s)),  GBar = round(G/s),  HBar = round(H/s)
+	// RBar = round(R/s),        PBar = round(P/s)
+	// N_bar 는 평문으로 처리 (암호화 불필요)
 	s := 1 / 1000.0
 	L := 1 / 1000000.0
 	r := 1 / 1000.0
-	fmt.Printf("Params: LogN=%d, 1/r=%.1f, 1/s=%.1f, 1/L=%.1f\n", params.LogN(), 1/r, 1/s, 1/L)
+	fmt.Printf("Params: LogN=%d, 1/r=%.0f, 1/s=%.0f, 1/L=%.0f\n", params.LogN(), 1/r, 1/s, 1/L)
 
-	// Contoller
-	// F (integer matrix !)
+	// ── Aero2 controller matrices ──────────────────────────────────────────
+	// Dimensions: state n=4, input m=2, output p=2
+	// z(k+1) = F*z + G*y + R*u + P*r
+	// u(k)   = H*z          (N_bar*r 는 평문으로 plant 또는 controller에서 가산)
+
+	// F: 4×4 nilpotent integer (스케일링 불필요)
 	F := [][]float64{
-		{0.0000, -0.0000, -0.0000, -0.0000},
-		{1.0000, 0.0000, 0.0000, -2.0000},
-		{-0.0000, 1.0000, 0.0000, 1.0000},
-		{0.0000, -0.0000, 1.0000, 2.0000},
+		{0, 0, 1, 0},
+		{0, 0, 0, 1},
+		{0, 0, 0, 0},
+		{0, 0, 0, 0},
 	}
 
+	// GBar = round(G / s) = round(G × 1000)  [4×2]
 	GBar := [][]float64{
-		{1000, -2439},
-		{-0, -9355},
-		{-0, -4934},
-		{0, 4684},
+		{2232, 341},
+		{220, 3159},
+		{-2166, -319},
+		{-202, -3024},
 	}
 
+	// HBar = round(H / s) = round(H × 1000)  [2×4]
 	HBar := [][]float64{
-		{-39838, 15011, -84120, -54269},
+		{-48570, 31205, 0, 0},
+		{-30380, -22353, 0, 0},
 	}
 
+	// RBar = round(R / s) = round(R × 1000)  [4×2]
 	RBar := [][]float64{
-		{-16},
-		{926},
-		{478},
-		{-452},
+		{-17, -22},
+		{21, -33},
+		{6, 8},
+		{-8, 12},
+	}
+
+	// PBar = round(P / s) = round(P × 1000)  [4×2]
+	PBar := [][]float64{
+		{2363, 576},
+		{455, 3422},
+		{-915, -220},
+		{-174, -1292},
 	}
 
 	// Controller Initial State
 	x_ini := []float64{0.0, 0.0, 0.0, 0.0}
 
-	// Dimensions input:m output:p state:n
+	// Dimensions
 	n := 4
-	m := 1
+	m := 2
 	p := 2
 
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
+	fmt.Printf("n=%d, m=%d, p=%d → tau=%d\n", n, m, p, tau)
 
 	// Galois Elements
 	logn := int(math.Log2(float64(tau)))
@@ -90,25 +111,20 @@ func main() {
 	levelQ := params.QCount() - 1
 	levelP := params.PCount() - 1
 
-	// Scaling (CDSL library)
-	// GBar := utils.ScalMatMult(1/s, G)
-	// HBar := utils.ScalMatMult(1/s, H)
-	// RBar := utils.ScalMatMult(1/s, R)
-
 	// RGSW Encryption
+	fmt.Println(">> Encrypting matrices...")
 	ctF := RGSW.EncPack(F, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctG := RGSW.EncPack(GBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctH := RGSW.EncPack(HBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 	ctR := RGSW.EncPack(RBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctP := RGSW.EncPack(PBar, tau, encryptorRGSW, levelQ, levelP, ringQ, params)
 
 	// Initial State Encryption
 	xBar := utils.RoundVec(utils.ScalVecMult(1/(r*s), x_ini))
 	xCtPack := RLWE.EncPack(xBar, tau, 1/L, *encryptorRLWE, ringQ, params)
 
-	// save directory for offline data
+	// Save directory
 	saveDir := "enc_data"
-
-	// [변경] 여기서부터는 fileutils (우리가 만든 파일 유틸)를 사용합니다.
 	if err := fileutils.EnsureDir(saveDir); err != nil {
 		panic(err)
 	}
@@ -125,7 +141,7 @@ func main() {
 		panic(err)
 	}
 
-	// Ciphertexts
+	// Encrypted matrices
 	if err := fileutils.SaveRGSWPack(saveDir, "ctF", ctF); err != nil {
 		panic(err)
 	}
@@ -136,6 +152,9 @@ func main() {
 		panic(err)
 	}
 	if err := fileutils.SaveRGSWPack(saveDir, "ctR", ctR); err != nil {
+		panic(err)
+	}
+	if err := fileutils.SaveRGSWPack(saveDir, "ctP", ctP); err != nil {
 		panic(err)
 	}
 

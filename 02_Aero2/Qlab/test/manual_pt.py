@@ -2,11 +2,11 @@
 # Aero2 Plant side — TCP plaintext controller
 #
 # 통신 흐름 (매 스텝):
-#   1. recv u        (Controller → Plant)  2 floats
-#   2. read sensor   (hardware tick @ 50Hz)
-#   3. apply u       (write_voltage)
-#   4. compute r     (square-wave schedule)
-#   5. send (u, y, r)(Plant → Controller)  6 floats
+#   1. read sensor   (hardware tick @ 50Hz)
+#   2. send y        (Plant → Controller)  2 floats
+#   3. recv u        (Controller → Plant)  2 floats
+#   4. apply u       (write_voltage)
+#   ※ r은 controller.go 내부에서 계산
 # -----------------------------------------------------------------------
 
 import sys
@@ -37,11 +37,10 @@ Ts              = 1.0 / FREQUENCY
 VMAX            = 15.0
 PITCH_LIMIT     = np.deg2rad(40)
 
-# ── Reference (must match controller.go) ────────────────────────────────
-REF_PITCH_DEG   =  10.0
-REF_YAW_DEG     = -10.0
-REF_HALF_PERIOD = 10.0   # seconds per half-cycle
-ref_base = np.array([np.deg2rad(REF_PITCH_DEG), np.deg2rad(REF_YAW_DEG)])
+# ── Reference (고정, scope 표시용) ──────────────────────────────────────
+REF_PITCH_DEG   =  30.0
+REF_YAW_DEG     = -30.0
+r = np.array([np.deg2rad(REF_PITCH_DEG), np.deg2rad(REF_YAW_DEG)])
 
 # ── TCP helpers ─────────────────────────────────────────────────────────
 def recv_exact(sock, n):
@@ -114,21 +113,26 @@ def control_loop():
                     time.sleep(1)
 
             while timestamp < RUN_TIME and not KILL_THREAD:
+                loop_start = time.perf_counter()
 
-                # ── 1. recv u from controller (2 floats) ──────────────────
-                u_vals = recv_floats(sock, 2)
-                if u_vals is None:
-                    break
-
-                # ── 2. read sensors (blocks at 50 Hz hardware tick) ───────
+                # ── 1. read sensors (blocks at 50 Hz hardware tick) ───────
                 myAero2.read_analog_encoder_other_channels()
                 theta_p = myAero2.pitchAngle
                 theta_y = myAero2.yawAngle
                 dp_meas = myAero2.pitchRate
                 dy_meas = myAero2.yawRate
                 y = np.array([theta_p, theta_y])
+                print(y)
 
-                # ── 3. safety check & apply u ──────────────────────────────
+                # ── 2. send y to controller (2 floats) ────────────────────
+                send_floats(sock, list(y))
+
+                # ── 3. recv u from controller (2 floats) ──────────────────
+                u_vals = recv_floats(sock, 2)
+                if u_vals is None:
+                    break
+
+                # ── 4. safety check & apply u ─────────────────────────────
                 V_main = float(np.clip(u_vals[0], -VMAX, VMAX))
                 V_tail = float(np.clip(u_vals[1], -VMAX, VMAX))
 
@@ -137,22 +141,19 @@ def control_loop():
                     print(f"  [SAFETY] pitch={np.rad2deg(theta_p):.1f}° — motor OFF")
 
                 myAero2.write_voltage(V_main, V_tail)
-                u_applied = np.array([V_main, V_tail])
 
-                # ── 4. square-wave reference ───────────────────────────────
-                ref_sign = 1 - 2 * (int(timestamp / REF_HALF_PERIOD) % 2)
-                r = ref_sign * ref_base
-
-                # ── 5. send (u_applied, y, r) = 6 floats to controller ────
-                send_floats(sock, list(u_applied) + list(y) + list(r))
-
-                # ── 6. scope ──────────────────────────────────────────────
+                # ── 5. scope ─────────────────────────────────────────────
                 scope.axes[0].sample(timestamp, [np.rad2deg(theta_p), np.rad2deg(r[0])])
                 scope.axes[1].sample(timestamp, [np.rad2deg(theta_y), np.rad2deg(r[1])])
                 scope.axes[2].sample(timestamp, [np.rad2deg(dp_meas)])
                 scope.axes[3].sample(timestamp, [np.rad2deg(dy_meas)])
                 scope.axes[4].sample(timestamp, [V_main])
                 scope.axes[5].sample(timestamp, [V_tail])
+
+                # ── 6. timing (observer_int.py 동일 구조) ────────────────
+                elapsed = time.perf_counter() - loop_start
+                if Ts - elapsed > 0:
+                    time.sleep(Ts - elapsed)
 
                 timestamp = time.time() - startTime
 
