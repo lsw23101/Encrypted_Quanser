@@ -107,7 +107,7 @@ def control_loop():
 
     # Set as 0 if using virtual Qube Servo
     # Set as 1 if using physical Qube Servo
-    hardware = 1
+    hardware = 0
 
     # Only matters when using virtual Qube. 
     # Set as 0 for virtual DC Motor and 1 for virtual pendulum
@@ -166,7 +166,7 @@ def control_loop():
             x_meas = np.array([theta, alpha, theta_dot, alpha_dot], dtype=np.float64)
 
             # negative feedback
-            u = -1 * float(H @ xhat)
+            u = 1 * float(H @ xhat)
             # u = float(H @ xhat)
             VMAX = 10.0
 

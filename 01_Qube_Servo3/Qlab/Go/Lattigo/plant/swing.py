@@ -73,11 +73,11 @@ def decrypt_helper(data_bytes, out_len):
 # Swing-up params
 SIGN_THETA = -1.0 
 SWING_KICK_DIR = 1.0  
-VMAX = 7.0
+VMAX = 8.0
 mp, Lp, g = 0.024, 0.129, 9.81
 l = Lp / 2
 Jp = mp * (Lp**2) / 3 
-mu = 150.0 
+mu = 120.0 
 switch_deg = 15.0 
 
 # Full state LQR gain
@@ -120,7 +120,7 @@ def control_loop():
         except ConnectionRefusedError:
             time.sleep(1)
 
-    with QubeServo3(hardware=1, pendulum=1, frequency=frequency) as myQube:
+    with QubeServo3(hardware=0, pendulum=1, frequency=frequency) as myQube:
         print(">> Step 1: Swing-up & Local Balancing Started.")
         
         state_theta_dot = np.array([0,0], dtype=np.float64)
