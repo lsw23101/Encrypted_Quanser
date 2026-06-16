@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import time
 import struct
 import ctypes
@@ -9,25 +10,36 @@ import math
 import numpy as np
 from threading import Thread
 
-# 1. Quanser Library Setup
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..', '00_libraries', 'python'))
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 1. Quanser Library Setup (스크립트 위치 기준 상대경로)
+sys.path.insert(0, os.path.join(_script_dir, '..', '..', '..', '..', '..', '00_libraries', 'python'))
 from pal.products.qube import QubeServo3
 from pal.utilities.scope import Scope
 from pal.utilities.math import ddt_filter
 
-# 2. Lattigo 암호화 라이브러리 로드
-lib_name = "../crypto/client_crypto.so"
-if os.name == 'nt' and not os.path.exists(lib_name):
-    lib_name = "../client_crypto.dll"
+# 2. 파라미터 로드 (offline.go 가 생성한 params.json)
+_params_path = os.path.abspath(os.path.join(_script_dir, '..', 'controller', 'enc_data', 'params.json'))
+with open(_params_path) as _f:
+    _cfg = json.load(_f)
+N_STATE  = _cfg['n']
+N_INPUT  = _cfg['m']
+N_OUTPUT = _cfg['p']
+
+# 3. Lattigo 암호화 라이브러리 로드 (스크립트 위치 기준 상대경로)
+if os.name == 'nt':
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.dll'))
+else:
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.so'))
 
 try:
-    lib = ctypes.CDLL(lib_name)
-    print(f"[Info] 라이브러리 로드 성공: {lib_name}")
+    lib = ctypes.CDLL(_lib_path)
+    print(f"[Info] 라이브러리 로드 성공: {_lib_path}")
 except OSError as e:
     print(f"[Error] 라이브러리 로드 실패: {e}")
     exit(1)
 
-lib.InitCrypto.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double]
+lib.InitCrypto.argtypes = [ctypes.c_char_p]
 lib.InitCrypto.restype = None
 lib.EncryptVector.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
 lib.EncryptVector.restype = ctypes.POINTER(ctypes.c_char)
@@ -71,14 +83,14 @@ def decrypt_helper(data_bytes, out_len):
     return res
 
 # Swing-up params
-SIGN_THETA = -1.0 
-SWING_KICK_DIR = 1.0  
-VMAX = 8.0
+SIGN_THETA = -1.0
+SWING_KICK_DIR = 1.0
+VMAX = 7.0
 mp, Lp, g = 0.024, 0.129, 9.81
 l = Lp / 2
-Jp = mp * (Lp**2) / 3 
-mu = 120.0 
-switch_deg = 15.0 
+Jp = mp * (Lp**2) / 3
+mu = 2.5
+switch_deg = 20.0
 
 # Full state LQR gain
 K_LOCAL = np.array([-2.0, 28.0, -1.5, 2.5]) 
@@ -100,14 +112,12 @@ scopeVoltage.attachSignal(name='u', width=1)
 # 4. Main Control Loop
 def control_loop():
     global KILL_THREAD
-    
+
     HOST, PORT = '127.0.0.1', 8000
-    N_STATE, N_INPUT, N_OUTPUT = 4, 1, 2
-    VAL_S, VAL_L, VAL_R = 1.0/1000.0, 1.0/1000000.0, 1.0/1000.0
     # 50Hz = 20ms sampling rate
-    frequency = 50 
-    
-    lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
+    frequency = 50
+
+    lib.InitCrypto(_params_path.encode())
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -131,6 +141,7 @@ def control_loop():
         startTime = time.time()
 
         # PHASE 1: Swing-up & LQR (Local)
+
         while not is_fully_stable and not KILL_THREAD:
             myQube.read_outputs()
             theta = myQube.motorPosition * SIGN_THETA
@@ -149,15 +160,13 @@ def control_loop():
                 
                 if stable_start_time is None:
                     stable_start_time = time.time()
-                elif time.time() - stable_start_time > 1.0:
+                elif time.time() - stable_start_time > 2.0:
                     is_fully_stable = True
             else:
                 stable_start_time = None
                 E_total = mp*g*l*(math.cos(alpha)-1) + 0.5*Jp*(alpha_dot**2)
                 term = np.sign(alpha_dot * math.cos(alpha))
-                u_raw = SWING_KICK_DIR * mu * (0.0 - E_total) * term
-                if (theta > 0 and u_raw > 0) or (theta < 0 and u_raw < 0): u = 0.0
-                else: u = u_raw
+                u = SWING_KICK_DIR * mu * (0.0 - E_total) * term
 
             voltage = np.clip(u, -VMAX, VMAX)
             myQube.write_voltage(-1 * voltage)
@@ -172,7 +181,7 @@ def control_loop():
             return
 
         # ---------------------------------------------------------------------
-        # PHASE 2: Encrypted Control (통신 딜레이 없음)
+        # PHASE 2: Encrypted Control 
         # ---------------------------------------------------------------------
         print(">> Step 2: Switching to Encrypted Control.")
         
@@ -195,7 +204,6 @@ def control_loop():
 
 
             # 3. actuator write
-            # 즉각적인 모터 구동
             if abs(math.degrees(alpha)) < 20:
                 voltage = np.clip(u_dec[0], -VMAX, VMAX)
             else:

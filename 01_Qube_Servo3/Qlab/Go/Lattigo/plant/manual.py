@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import time
 import struct
 import ctypes
@@ -9,28 +10,41 @@ import math
 import numpy as np
 from threading import Thread
 
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+
 # ========================================================
-# 1. Quanser Library Setup
+# 1. Quanser Library Setup (스크립트 위치 기준 상대경로)
 # ========================================================
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..', '..', '00_libraries', 'python'))
+sys.path.insert(0, os.path.join(_script_dir, '..', '..', '..', '..', '..', '00_libraries', 'python'))
 from pal.products.qube import QubeServo3
 from pal.utilities.scope import Scope
 
 # ========================================================
-# 2. Go 암호화 라이브러리 로드
+# 2. 파라미터 로드 (offline.go 가 생성한 params.json)
 # ========================================================
-lib_name = "../crypto/client_crypto.so"
-if os.name == 'nt' and not os.path.exists(lib_name):
-    lib_name = "../client_crypto.dll"
+_params_path = os.path.abspath(os.path.join(_script_dir, '..', 'controller', 'enc_data', 'params.json'))
+with open(_params_path) as _f:
+    _cfg = json.load(_f)
+N_STATE  = _cfg['n']
+N_INPUT  = _cfg['m']
+N_OUTPUT = _cfg['p']
+
+# ========================================================
+# 3. Go 암호화 라이브러리 로드 (스크립트 위치 기준 상대경로)
+# ========================================================
+if os.name == 'nt':
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.dll'))
+else:
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.so'))
 
 try:
-    lib = ctypes.CDLL(lib_name)
-    print(f"[Info] 라이브러리 로드 성공: {lib_name}")
+    lib = ctypes.CDLL(_lib_path)
+    print(f"[Info] 라이브러리 로드 성공: {_lib_path}")
 except OSError as e:
     print(f"[Error] 라이브러리 로드 실패: {e}")
     exit(1)
 
-lib.InitCrypto.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_double, ctypes.c_double, ctypes.c_double]
+lib.InitCrypto.argtypes = [ctypes.c_char_p]
 lib.InitCrypto.restype = None
 lib.EncryptVector.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
 lib.EncryptVector.restype = ctypes.POINTER(ctypes.c_char)
@@ -96,12 +110,10 @@ scopeVoltage.attachSignal(name='u', width=1)
 def control_loop():
     HOST = '127.0.0.1'
     PORT = 8000
-    simulationTime = 60 
-    N_STATE, N_INPUT, N_OUTPUT = 4, 1, 2
-    VAL_S, VAL_L, VAL_R = 1.0/1000.0, 1.0/1000000.0, 1.0/1000.0
-    frequency = 50 
-    
-    lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
+    simulationTime = 60
+    frequency = 50
+
+    lib.InitCrypto(_params_path.encode())
 
     with QubeServo3(hardware=0, pendulum=1, frequency=frequency) as myQube:
         print(">> Hardware Initialized.")

@@ -1,78 +1,19 @@
 # SeoulTech Encrypted Control on Quanser
 
-This repository contains the implementation of encrypted control for the Quanser Qube Servo 3 (Rotary Inverted Pendulum) and plaintext baseline controllers for the Quanser Aero 2 (2-DOF Helicopter).
+## 돌리는 방법 (Qlab)
 
-See demonstration video !
-https://www.youtube.com/shorts/artZGFfgOVo
+터미널 2개를 연다.
 
-> **Reference — CDSL (Cryptography for Dynamic Systems Library)**
-> RLWE-based encrypted control algorithms by the Control and Dynamics Systems Lab (CDSL), Seoul National University.
-> https://github.com/CDSL-EncryptedControl/CDSL
+### 터미널 1 — Controller
+`C:\Users\sang2\all\Encrypted_Quanser\01_Qube_Servo3\Qlab\Go\Lattigo\controller`
 
+1. `offline.go` 파일에서 암호 파라미터와 제어기 파라미터를 설정하고 한 번 실행한다. (`go run offline.go`) — 이때 생성되는 파라미터를 다른 파일들이 공유한다.
+2. `go run controller.go` 실행
 
-### 00_libraries
-Quanser PAL/HAL/QVL Python libraries and Simulink models for Quanser hardware.
+### 터미널 2 — Plant
+`C:\Users\sang2\all\Encrypted_Quanser\01_Qube_Servo3\Qlab\Go\Lattigo\plant`
 
+- `python swing.py` 실행
 
-### 01_Qube_Servo3
-Applies the CDSL encrypted control library to the Quanser Qube Servo 3 (Rotary Inverted Pendulum).
-Utilizes a re-encryption method combined with time scheduling to ensure only a single send/receive transmission occurs per control step.
-
-Plant and controller communicate via **TCP** (single PC, split processes).
-
-Each environment (Qlab virtual / Hardware) shares the same code structure:
-
-* **Qlab** — Quanser QLab virtual environment
-* **Hardware** — Physical Qube Servo 3 hardware
-
-Both contain:
-
-* **Go:**
-  * **Lattigo** — Encrypted controller using RLWE/RGSW
-    * controller
-      * `controller.go`: Unpacks the controller state $x_c$, computes the control input $u = Hx$, transmits the data, receives the sensor output $y$, and updates the state.
-      * `offline.go`: Restore encrypted RGSW matrices, RLWE initial state and some evaluation keys.
-      * `conversion.m`: Design re-encryption based controller (F, G, H, R).
-    * plant
-      * `swing.py`: Executes the full hardware sequence: Swing-up → Full-state LQR (1 sec) → Encrypted control.
-      * `manual.py`: Runs encrypted control without the automated swing-up (requires manual stabilization to the upright position).
-      * `simulation.py`: Simulation environment for debugging purposes.
-    * crypto: Build files to use Lattigo in Python
-
-  * **Plaintext** — Plaintext baseline (no encryption) with same TCP structure
-    * `controller.go`: Computes $u = Hx_c$, updates state via $x_c' = Fx_c + Gy$, communicates over TCP.
-    * `swing.py` / `manual.py` / `simulation.py`: Same plant-side scripts as Lattigo version.
-
-* **Python:**
-  * **Plaintext** — Pure Python plaintext baseline
-    * `controller.py`: Python equivalent of Go/Plaintext controller, communicates over TCP.
-    * `swing.py` / `manual.py` / `simulation.py`: Plant-side scripts.
-    * `local_20ms.py`: Combined plant + controller in a single process (no TCP, for local testing).
-
-
-### 02_Aero2
-Quanser Aero 2 (2-DOF helicopter) controllers.
-
-* **Qlab** — Quanser QLab virtual environment
-  * **Python/Plaintext**
-    * `model.m`: 4th-order MIMO state-space model and LQR controller design (Fellag et al., 2024). Linearized about hover equilibrium; includes cross-coupling between pitch and yaw channels.
-    * `fullstate.py`: Full-state feedback LQR tracking control. Tracks a step reference (pitch ±30°, yaw ∓30°) with feedforward precompensator $N_{bar}$; reference is flipped at t=10 s to verify symmetric tracking.
-
-* **Hardware** — Physical Aero 2 hardware
-
-* **quanser_resource** — Quanser official sample scripts
-  * `aero2_1dof_rotor_0_pi_control_immediate.py`: PI controller for rotor 0 (1-DOF, immediate I/O mode, 150 Hz).
-  * `aero2_read_all_sensor_data_task.py`: Read all sensor data in task-based mode.
-  * `aero2_read_all_sensor_data_task_qscope.py`: Sensor data with real-time QScope visualization.
-
-
-### 03_Modeling
-Dynamic models and hardware parameters for Quanser platforms.
-
-* **Aero2**
-  * Reference paper: *2-DOF Helicopter Control Via State Feedback and Full/Reduced-Order Observers*
-  * Quanser official lab materials (l0–l9): hardware interfacing, block diagram modeling, rotor step response, pitch parameter estimation, PID design, gain scheduling — each with `digital_twin` and `hardware` versions.
-
-* **Qube_servo3**
-  * State-space models and parameter files for Qube Servo 2 (QS2) and Qube Servo 3 (QS3).
-  * Controller design scripts and Quanser SP5 pendulum modeling lab materials.
+  - `manual.py`: 이 파일을 실행한 후 Qlab 시뮬레이션에서 막대 세우는 버튼을 클릭해야 하는 파일
+  - `simulation.py`, `local_20ms.py`: 디버그용

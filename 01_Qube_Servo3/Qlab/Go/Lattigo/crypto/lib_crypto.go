@@ -5,11 +5,15 @@ package main
 */
 import "C"
 
-// 암호 라이브러리를 파이썬엣서 사용
-// go build -o client_crypto.so -buildmode=c-shared lib_crypto.go
+// 암호 라이브러리를 파이썬에서 사용
+// go build -o client_crypto.dll -buildmode=c-shared lib_crypto.go  (Windows)
+// go build -o client_crypto.so  -buildmode=c-shared lib_crypto.go  (Linux/macOS)
+// 파라미터는 offline.go 가 생성하는 enc_data/params.json 에서 읽습니다.
 
 import (
+	"encoding/json"
 	"math"
+	"os"
 	"path/filepath"
 	"unsafe"
 
@@ -31,20 +35,47 @@ var (
 	tau     int
 )
 
-//export InitCrypto
-func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
-	// 1. 전역 변수 설정
-	n = int(in_n)
-	m = int(in_m)
-	p = int(in_p)
-	s = float64(in_s)
-	L = float64(in_L)
-	r = float64(in_r)
+type cryptoConfig struct {
+	LogN    int     `json:"logN"`
+	LogQ    []int   `json:"logQ"`
+	LogP    []int   `json:"logP"`
+	NTTFlag bool    `json:"nttFlag"`
+	S       float64 `json:"s"`
+	L       float64 `json:"L"`
+	R       float64 `json:"r"`
+	N       int     `json:"n"`
+	M       int     `json:"m"`
+	P       int     `json:"p"`
+}
 
-	// Set same params as offline.go and controller.go
-	var err error
+// InitCrypto 는 params.json 파일 경로를 받아 암호문 파라미터를 초기화합니다.
+// Python 에서 호출: lib.InitCrypto(params_json_path.encode())
+//
+//export InitCrypto
+func InitCrypto(configPathC *C.char) {
+	configPath := C.GoString(configPathC)
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		panic("params.json 로드 실패 (offline.go 를 먼저 실행하세요): " + err.Error())
+	}
+	var cfg cryptoConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		panic("params.json 파싱 실패: " + err.Error())
+	}
+
+	n = cfg.N
+	m = cfg.M
+	p = cfg.P
+	s = cfg.S
+	L = cfg.L
+	r = cfg.R
+
 	params, err = rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
+		LogN:    cfg.LogN,
+		LogQ:    cfg.LogQ,
+		LogP:    cfg.LogP,
+		NTTFlag: cfg.NTTFlag,
 	})
 	if err != nil {
 		panic(err)
@@ -54,8 +85,8 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau = int(math.Pow(2, math.Ceil(math.Log2(maxDim))))
 
-	// Key Load
-	loadDir := "../controller/enc_data"
+	// 비밀키 로드 (params.json 과 같은 enc_data 디렉토리)
+	loadDir := filepath.Dir(configPath)
 	sk := new(rlwe.SecretKey)
 	if err := fileutils.ReadRT(filepath.Join(loadDir, "sk.dat"), sk); err != nil {
 		panic("Key Load Fail: " + err.Error())
@@ -67,19 +98,14 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 
 //export EncryptVector
 func EncryptVector(valuesPtr *C.double, length C.int, sizePtr *C.int) *C.char {
-	// 1. C 배열 -> Go 슬라이스로 변환 (복사 없이 참조)
-	// (매우 중요: 1<<30은 임의의 큰 수, 실제로는 length만큼만 슬라이싱함)
 	cSlice := (*[1 << 30]float64)(unsafe.Pointer(valuesPtr))[:length:length]
 
-	// Go 슬라이스로 복사 (안전하게)
 	vec := make([]float64, int(length))
 	copy(vec, cSlice)
 
-	// 2. 암호화
 	vecBar := utils.RoundVec(utils.ScalVecMult(1/r, vec))
 	ctPack := RLWE.EncPack(vecBar, tau, 1/L, *encryptor, ringQ, params)
 
-	// 3. 직렬화
 	data, err := ctPack.MarshalBinary()
 	if err != nil {
 		return nil
@@ -98,14 +124,11 @@ func DecryptVector(dataPtr unsafe.Pointer, dataLen C.int, outLen C.int) *C.doubl
 		return nil
 	}
 
-	// Decrypt and decode
 	targetDim := int(outLen)
 	decVec := RLWE.DecUnpack(ctPack, targetDim, tau, *decryptor, r*s*s*L, ringQ, params)
 
-	// C memory allocation
-	res := (*C.double)(C.malloc(C.size_t(8 * targetDim))) // 8 bytes * N
+	res := (*C.double)(C.malloc(C.size_t(8 * targetDim)))
 
-	// Go Slice -> C array
 	start := unsafe.Pointer(res)
 	size := unsafe.Sizeof(float64(0))
 

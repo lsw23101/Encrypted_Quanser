@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -19,6 +21,32 @@ import (
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/ring"
 )
+
+// CryptoConfig는 enc_data/params.json (offline.go 가 생성)에서 로드합니다.
+type CryptoConfig struct {
+	LogN    int     `json:"logN"`
+	LogQ    []int   `json:"logQ"`
+	LogP    []int   `json:"logP"`
+	NTTFlag bool    `json:"nttFlag"`
+	S       float64 `json:"s"`
+	L       float64 `json:"L"`
+	R       float64 `json:"r"`
+	N       int     `json:"n"`
+	M       int     `json:"m"`
+	P       int     `json:"p"`
+}
+
+func loadConfig(path string) CryptoConfig {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic("params.json 로드 실패 (offline.go 를 먼저 실행하세요): " + err.Error())
+	}
+	var cfg CryptoConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		panic("params.json 파싱 실패: " + err.Error())
+	}
+	return cfg
+}
 
 // Lattigo 데이터 송수신 함수들...
 
@@ -68,18 +96,21 @@ func readCiphertext(conn net.Conn) (*rlwe.Ciphertext, error) {
 }
 
 func main() {
-	// 1. RLWE Params
+	// 1. RLWE Params (enc_data/params.json 에서 로드 — offline.go 가 생성합니다)
 	fmt.Println("--- RLWE params ---")
 	loadDir := "enc_data"
 
-	// RWLE 파라미터 (128-bit 조금 부족)
+	cfg := loadConfig(filepath.Join(loadDir, "params.json"))
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
+		LogN:    cfg.LogN,
+		LogQ:    cfg.LogQ,
+		LogP:    cfg.LogP,
+		NTTFlag: cfg.NTTFlag,
 	})
 	ringQ := params.RingQ()
 
 	// 차원 설정 input:m output:p state:n
-	n, m, p := 4, 1, 2
+	n, m, p := cfg.N, cfg.M, cfg.P
 
 	maxDim := math.Max(math.Max(float64(n), float64(m)), float64(p))
 	tau := int(math.Pow(2, math.Ceil(math.Log2(maxDim))))

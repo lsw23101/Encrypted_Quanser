@@ -3,36 +3,45 @@ import time
 import struct
 import csv
 import ctypes
+import json
 import os
 import numpy as np
 import control as ct
 
+_script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # ==========================================
-# 1. Go 암호화 라이브러리 로드
+# 1. 파라미터 로드 (offline.go 가 생성한 params.json)
 # ==========================================
-lib_name = "../crypto/client_crypto.so"
-if os.name == 'nt' and not os.path.exists(lib_name):
-    lib_name = "./client_crypto.dll"
+_params_path = os.path.abspath(os.path.join(_script_dir, '..', 'controller', 'enc_data', 'params.json'))
+with open(_params_path) as _f:
+    _cfg = json.load(_f)
+N_STATE  = _cfg['n']
+N_INPUT  = _cfg['m']
+N_OUTPUT = _cfg['p']
+
+# ==========================================
+# 2. Go 암호화 라이브러리 로드 (스크립트 위치 기준 상대경로)
+# ==========================================
+if os.name == 'nt':
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.dll'))
+else:
+    _lib_path = os.path.abspath(os.path.join(_script_dir, '..', 'crypto', 'client_crypto.so'))
 
 try:
-    lib = ctypes.CDLL(lib_name)
-    print(f"[Info] 라이브러리 로드 성공: {lib_name}")
+    lib = ctypes.CDLL(_lib_path)
+    print(f"[Info] 라이브러리 로드 성공: {_lib_path}")
 except OSError as e:
-    print(f"[Error] 라이브러리를 찾을 수 없습니다. (go build 확인 필요): {e}")
+    print(f"[Error] 라이브러리를 찾을 수 없습니다. (offline.go 실행 후 go build 확인 필요): {e}")
     exit(1)
 
-# --- Go 함수 시그니처 정의 (Generic 버전) ---
-lib.InitCrypto.argtypes = [
-    ctypes.c_int, ctypes.c_int, ctypes.c_int,         # n, m, p
-    ctypes.c_double, ctypes.c_double, ctypes.c_double # s, L, r
-]
+lib.InitCrypto.argtypes = [ctypes.c_char_p]
 lib.InitCrypto.restype = None
 
 lib.EncryptVector.argtypes = [
-    ctypes.POINTER(ctypes.c_double), # 입력 배열 포인터
-    ctypes.c_int,                    # 입력 배열 길이
-    ctypes.POINTER(ctypes.c_int)     # 출력 크기 담을 포인터
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_int,
+    ctypes.POINTER(ctypes.c_int)
 ]
 lib.EncryptVector.restype = ctypes.POINTER(ctypes.c_char)
 
@@ -134,19 +143,9 @@ def decrypt_helper(data_bytes, out_len):
 # 4. Main Simulation
 # ==========================================
 def run_plant_simulation():
-    # Simulation Parameters
-    N_STATE = 4
-    N_INPUT = 1
-    N_OUTPUT = 2
-    
-    # Quantization Parameters
-    VAL_S = 1.0/1000.0
-    VAL_L = 1.0/1000000.0
-    VAL_R = 1.0/1000.0
-    
-    # Init Crypto
+    # Init Crypto (파라미터는 params.json 에서 자동 로드)
     print(f">> Go Crypto Init (n={N_STATE}, m={N_INPUT}, p={N_OUTPUT})...")
-    lib.InitCrypto(N_STATE, N_INPUT, N_OUTPUT, VAL_S, VAL_L, VAL_R)
+    lib.InitCrypto(_params_path.encode())
 
     # Initialize Plant
     TS = 0.02 # Sampling Time (예시: 0.02초, 필요에 따라 조정)
