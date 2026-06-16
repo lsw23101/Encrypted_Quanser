@@ -1,8 +1,9 @@
 # SeoulTech Encrypted Control on Quanser
 
-## 돌리는 방법 (Qlab)
+## 돌리는 방법 (Qlab) (Quanser SDK와 Lattigo, pip 등 선행작업 필요)
 
-Quanser interactive labs에서 qube-servo3 프로그램을 실행한다.
+Quanser interactive labs에서 qube-servo3 프로그램을 실행한다.  
+
 controller 폴더와 plant 폴더에서 각각 go 파일 하나와 python 파일 하나를 실행한다.
 
 ### 터미널 1 — `01_Qube_Servo3/Qlab/Go/Lattigo/controller` 폴더에서 실행
