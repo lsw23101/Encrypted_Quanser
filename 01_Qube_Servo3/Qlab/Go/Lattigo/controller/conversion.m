@@ -44,14 +44,6 @@ obs_poles = [0.71 0.72 0.73 0.74];            % 크기를 절반으로 줄인 �
 L = place(A', C', obs_poles).';      % 듀얼 시스템에 극배치 → 전치
 
 
-
-
-% 
-% [~, L, ~] = idare(A.', C.', Q, R2, [], []);
-% L = L.';
-
-
-
 % (F,G,H): resulting controller
 F = A + B*K - L*C;
 G = L;
