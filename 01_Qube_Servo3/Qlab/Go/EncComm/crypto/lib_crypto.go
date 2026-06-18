@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"unsafe"
 
-	fileutils "github.com/CDSL-EncryptedControl/CDSL/Lattigo/utils"
+	fileutils "github.com/CDSL-EncryptedControl/CDSL/EncComm/utils"
 	utils "github.com/CDSL-EncryptedControl/CDSL/utils"
 	RLWE "github.com/CDSL-EncryptedControl/CDSL/utils/core/RLWE"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"

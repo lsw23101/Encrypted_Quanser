@@ -1,19 +1,106 @@
-# SeoulTech Encrypted Control on Quanser
+# Encrypted Control on Quanser Qube Servo 3
 
-## 돌리는 방법 (Qlab) (Quanser SDK와 Lattigo, pip 등 선행작업 필요)
+Ring-LWE(RLWE/RGSW) 동형암호를 이용해 Quanser Qube Servo 3(도립진자)를 **암호화된 상태에서 제어**하는 구현입니다.  
+CDSL(Control and Dynamics Systems Lab, SNU)의 암호제어 라이브러리를 기반으로 합니다.
 
-Quanser interactive labs에서 qube-servo3 프로그램을 실행한다.  
+---
 
-controller 폴더와 plant 폴더에서 각각 go 파일 하나와 python 파일 하나를 실행한다.
+## 구조
 
-### 터미널 1 — `01_Qube_Servo3/Qlab/Go/Lattigo/controller` 폴더에서 실행
+```
+01_Qube_Servo3/Qlab/Go/
+  PlainComm/          ← 통신은 평문, 제어 연산은 암호문 (주 실행 버전)
+    encrypt.go        ← 암호화 제어기 (Go에서 암호화·연산·복호화 수행)
+    non_encrypt.go    ← 평문 제어기 (비교용 baseline)
+    swing.py          ← 하드웨어 인터페이스 (swing-up → 암호제어)
+    manual.py         ← 수동 세우기 후 제어 시작
+  EncComm/            ← 통신도 암호문 (TCP로 암호문을 직접 송수신)
+    controller/       ← Go 암호화 제어기
+    plant/            ← Python 하드웨어 인터페이스
+    crypto/           ← Python FFI용 C-shared 라이브러리
+```
 
-1. `offline.go` 파일에서 암호 파라미터와 제어기 파라미터를 설정하고 한 번 실행한다. (`go run offline.go`) — 이때 생성되는 파라미터를 다른 파일들이 공유한다. (리포 기준 이미 실행 된 상태, 파라미터 변경이 필요할 시 변경 후 실행)
-2. `go run controller.go` 실행
+### PlainComm vs EncComm
 
-### 터미널 2 — `01_Qube_Servo3/Qlab/Go/Lattigo/plant` 폴더에서 실행
+| | PlainComm | EncComm |
+|---|---|---|
+| TCP 통신 | **평문** float64 | **암호문** (RLWE ciphertext bytes) |
+| 암호화 위치 | Go 제어기 내부 | Python(plant)에서 암호화 후 전송 |
+| 사용 목적 | 주 데모 / 성능 비교 | 완전한 암호 통신 파이프라인 |
 
-- `python swing.py` 실행
+EncComm은 Python이 직접 Lattigo 공유 라이브러리(`.dll`/`.so`)를 로드해 암호화하고 암호문을 TCP로 주고받는 구조입니다.
 
-  - `manual.py`: 이 파일을 실행한 후 Qlab 시뮬레이션에서 막대 세우는 버튼을 클릭해야 하는 파일
-  - `simulation.py`, `local_20ms.py`: 디버그용
+---
+
+## 실행 방법 (PlainComm 기준)
+
+> 사전 준비: Quanser Interactive Labs 실행, Go 설치, Python 의존성 설치 완료 가정
+
+### 암호화 제어기 (`encrypt.go` + `swing.py`)
+
+**터미널 1** — Go 암호화 제어기 시작
+
+```bash
+cd 01_Qube_Servo3/Qlab/Go
+go run ./PlainComm/encrypt.go
+```
+
+키 생성 및 행렬 암호화가 완료되면 `--- Ready ---` 출력 후 연결 대기.
+
+**터미널 2** — Python 하드웨어 인터페이스
+
+```bash
+cd 01_Qube_Servo3/Qlab/Go/PlainComm
+python swing.py
+```
+
+swing-up → LQR 안정화 → 암호화 제어 순으로 자동 전환.  
+수동으로 세운 후 바로 암호화 제어를 시작하려면 `manual.py`를 사용.
+
+### 평문 제어기 (`non_encrypt.go` + `swing.py`)
+
+**터미널 1**
+
+```bash
+cd 01_Qube_Servo3/Qlab/Go
+go run ./PlainComm/non_encrypt.go
+```
+
+**터미널 2**
+
+```bash
+cd 01_Qube_Servo3/Qlab/Go/PlainComm
+python swing.py
+```
+
+`swing.py`는 두 제어기 모두와 호환됩니다.
+
+---
+
+## 통신 프로토콜 (PlainComm)
+
+매 제어 주기(20 ms)마다:
+
+1. **Controller → Plant**: 평문 `u` (float64 × 1)
+2. **Plant → Controller**: 평문 `y = [θ, α]` (float64 × 2)
+
+`encrypt.go`는 내부에서 `y`를 RLWE 암호화하고, 암호문 연산으로 `u = H·x`를 계산한 뒤 복호화해서 전송합니다.
+
+---
+
+## 제어기 파라미터
+
+| 항목 | 값 |
+|---|---|
+| 제어 주기 | 20 ms (50 Hz) |
+| RLWE 다항식 차수 | N = 2¹⁰ = 1024 |
+| 상태 차원 n | 4 |
+| 출력 차원 p | 2 (θ, α) |
+| 입력 차원 m | 1 (전압 u) |
+
+---
+
+## 참고
+
+- CDSL 암호제어 라이브러리: https://github.com/CDSL-EncryptedControl/CDSL
+- Lattigo (RLWE/RGSW 라이브러리): https://github.com/tuneinsight/lattigo

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	// 1. 파일 유틸
-	fileutils "github.com/CDSL-EncryptedControl/CDSL/Lattigo/utils"
+	fileutils "github.com/CDSL-EncryptedControl/CDSL/EncComm/utils"
 
 	// 2. 라이브러리
 	RGSW "github.com/CDSL-EncryptedControl/CDSL/utils/core/RGSW"

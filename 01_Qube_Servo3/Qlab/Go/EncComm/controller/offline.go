@@ -11,7 +11,7 @@ import (
 
 	utils "github.com/CDSL-EncryptedControl/CDSL/utils"
 
-	fileutils "github.com/CDSL-EncryptedControl/CDSL/Lattigo/utils"
+	fileutils "github.com/CDSL-EncryptedControl/CDSL/EncComm/utils"
 
 	RGSW "github.com/CDSL-EncryptedControl/CDSL/utils/core/RGSW"
 	RLWE "github.com/CDSL-EncryptedControl/CDSL/utils/core/RLWE"

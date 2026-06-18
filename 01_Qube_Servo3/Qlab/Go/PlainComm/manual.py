@@ -64,7 +64,7 @@ def control_loop():
     N_INPUT, N_OUTPUT = 1, 2
     frequency = 50
 
-    with QubeServo3(hardware=1, pendulum=1, frequency=frequency) as myQube:
+    with QubeServo3(hardware=0, pendulum=1, frequency=frequency) as myQube:
         print(">> Hardware Initialized.")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
