@@ -100,10 +100,35 @@ python swing.py
 
 ---
 
-## 02_Aero2
+## 02_Aero2 — Encrypted ILC (Quanser Aero2)
 
 Quanser Aero2 2DOF 헬리콥터를 대상으로 한 **암호화 ILC(Iterative Learning Control)** 구현입니다.  
 반복 시행마다 궤적 추종 오차를 줄이는 Norm-Optimal ILC를 동형암호 위에서 수행합니다.
+
+### 실행 방법 (Qlab 기준)
+
+**터미널 1** — Go 암호화 ILC 서버 (전체 실험 동안 유지)
+
+```bash
+cd 02_Aero2/ILC/Virtual_simulation
+go run EncILC_svd.go
+```
+
+오프라인 셋업 완료 후 `--- Ready ---` 출력까지 약 30초 소요.
+
+**터미널 2** — Python 하드웨어 클라이언트 (trial마다 반복 실행)
+
+```bash
+cd 02_Aero2/ILC/Virtual_simulation
+python TCP.py
+```
+
+**반복 절차 (trial k → k+1):**
+1. `TCP.py` 실행 → Qlab에서 trial 진행
+2. trial 종료 후 Qlab에서 **Reset 버튼** 눌러 초기 상태로 복귀
+3. `python TCP.py` 다시 실행 → 반복
+
+서버(터미널 1)는 계속 켜둔다. trial 결과는 `data/data_k.npz`에 자동 저장.
 
 ---
 
