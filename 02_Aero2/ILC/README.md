@@ -56,19 +56,32 @@ go get github.com/CDSL-EncryptedControl/CDSL
 
 ### Running
 
-Start the Go server first (takes ~30s for offline setup), then the Python client:
+**Terminal 1** — Go 암호화 ILC 서버 (한 번만 실행, 전체 실험 동안 유지)
 
 ```bash
-# Terminal 1 — encrypted ILC server
 cd Virtual_simulation
 go run EncILC_svd.go
+```
 
-# Terminal 2 — hardware client
+오프라인 셋업 완료 후 `--- Ready ---` 출력까지 약 30초 소요.  
+서버는 trial이 끝나도 ILC 상태(암호화된 feedforward)를 누적하며 계속 대기한다.
+
+**Terminal 2** — Python 하드웨어 클라이언트 (trial마다 반복 실행)
+
+```bash
 cd Virtual_simulation
 python TCP.py
 ```
 
-On each completed trial, results are saved to `Virtual_simulation/data/data_k.npz`.
+**반복 절차 (trial k → k+1):**
+
+1. `TCP.py` 실행 → Qlab에서 trial 진행 (10초)
+2. trial 종료 후 Qlab에서 **Reset 버튼** 눌러 초기 상태로 복귀
+3. Terminal 2에서 `python TCP.py` 다시 실행
+4. 반복
+
+각 trial 결과는 `Virtual_simulation/data/data_k.npz`에 자동 저장된다.  
+Terminal 1의 서버는 계속 켜둔다.
 
 ### Plot learning progress
 
