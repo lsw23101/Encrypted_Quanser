@@ -41,11 +41,12 @@ def recv_floats(sock, count):
 SIGN_THETA = -1.0
 SWING_KICK_DIR = 1.0
 VMAX = 7.0
+THETA_LIM = math.pi / 2  # arm protection at ±90 deg (mechanical stop ~±100 deg)
 mp, Lp, g = 0.024, 0.129, 9.81
 l = Lp / 2
 Jp = mp * (Lp**2) / 3
-mu = 200.0
-switch_deg = 15.0
+mu = 50.0
+switch_deg = 25.0
 
 # Full state LQR gain
 K_LOCAL = np.array([-2.0, 20.0, -1.5, 2.5])
@@ -120,7 +121,7 @@ def control_loop():
                 E_total = mp*g*l*(math.cos(alpha)-1) + 0.5*Jp*(alpha_dot**2)
                 term = np.sign(alpha_dot * math.cos(alpha))
                 u_raw = SWING_KICK_DIR * mu * (0.0 - E_total) * term
-                if (theta > 0 and u_raw > 0) or (theta < 0 and u_raw < 0): u = 0.0
+                if (theta > THETA_LIM and u_raw > 0) or (theta < -THETA_LIM and u_raw < 0): u = 0.0
                 else: u = u_raw
 
             voltage = np.clip(u, -VMAX, VMAX)
