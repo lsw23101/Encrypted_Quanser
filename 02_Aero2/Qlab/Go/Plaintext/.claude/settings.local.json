@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(grep -n \"func.*Add.*Plaintext\\\\|func.*AddPlaintext\\\\|func.*Add.*\" /c/Users/sang2/go/pkg/mod/github.com/tuneinsight/lattigo/v6@v6.1.0/core/rlwe/*.go)",
-      "Bash(grep:*)",
-      "Bash(go build:*)"
-    ]
-  }
-}

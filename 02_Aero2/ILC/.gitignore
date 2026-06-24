@@ -1,0 +1,27 @@
+# Experiment data & simulation outputs
+data/
+storage/
+ilc_state/
+ilc_state_*/
+result/
+result_*/
+test/
+Virtual_simulation/data/
+Virtual_simulation/ilc_state/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# MATLAB
+*.asv
+
+# Go
+*.exe
+*.exe~
+
+# Claude
+.claude/
