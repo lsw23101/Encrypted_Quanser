@@ -107,6 +107,8 @@ Quanser Aero2 2DOF 헬리콥터를 대상으로 한 **암호화 ILC(Iterative Le
 
 ### 실행 방법 (Qlab 기준)
 
+> **Qlab 설정**: Aero2 블록 Properties → **Helicopter Configuration: On** 으로 변경 필요.
+
 **터미널 1** — Go 암호화 ILC 서버 (전체 실험 동안 유지)
 
 ```bash
