@@ -116,7 +116,7 @@ cd 02_Aero2/ILC/Virtual_simulation
 go run EncILC_svd.go
 ```
 
-오프라인 셋업 완료 후 `--- Ready ---` 출력까지 약 30초 소요.
+오프라인 셋업 완료 후 `--- Ready ---` 
 
 **터미널 2** — Python 하드웨어 클라이언트 (trial마다 반복 실행)
 
