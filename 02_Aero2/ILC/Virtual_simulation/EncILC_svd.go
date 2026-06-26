@@ -707,20 +707,10 @@ func main() {
 			u[0] += vIlcVec[2*step]
 			u[1] += vIlcVec[2*step+1]
 
-			// Re-encrypt u (before clipping) for encrypted state update
+			// Re-encrypt u for encrypted state update
 			uReEnc := RLWE.Enc(
 				utils.RoundVec(utils.ScalVecMult(1/r, u)),
 				1/L, *encryptorRLWE, ringQ, params)
-
-			// Clip u for hardware output
-			for i := range u {
-				if u[i] > 20 {
-					u[i] = 20
-				}
-				if u[i] < -20 {
-					u[i] = -20
-				}
-			}
 
 			// Encrypted observer state update: z = F×z + G×y + R×u + P×r
 			FzCt := RGSW.MultPack(zCt, ctF, evaluatorRGSW, ringQ, params)

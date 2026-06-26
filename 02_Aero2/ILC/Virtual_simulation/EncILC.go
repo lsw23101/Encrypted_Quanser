@@ -620,16 +620,6 @@ func main() {
 				utils.RoundVec(utils.ScalVecMult(1/r, u)),
 				1/L, *encryptorRLWE, ringQ, params)
 
-			// Clip u for hardware output
-			for i := range u {
-				if u[i] > 20 {
-					u[i] = 20
-				}
-				if u[i] < -20 {
-					u[i] = -20
-				}
-			}
-
 			// Encrypted observer state update: z = F×z + G×y + R×u + P×r
 			FzCt := RGSW.MultPack(zCt, ctF, evaluatorRGSW, ringQ, params)
 			GyCt := RGSW.MultPack(yCt, ctG, evaluatorRGSW, ringQ, params)
