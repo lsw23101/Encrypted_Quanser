@@ -77,29 +77,6 @@ python swing.py
 
 ---
 
-## 통신 프로토콜 (PlainComm)
-
-매 제어 주기(20 ms)마다:
-
-1. **Controller → Plant**: 평문 `u` (float64 × 1)
-2. **Plant → Controller**: 평문 `y = [θ, α]` (float64 × 2)
-
-`encrypt.go`는 내부에서 `y`를 RLWE 암호화하고, 암호문 연산으로 `u = H·x`를 계산한 뒤 복호화해서 전송합니다.
-
----
-
-## 제어기 파라미터 (not secure)
-
-| 항목 | 값 |
-|---|---|
-| 제어 주기 | 20 ms (50 Hz) |
-| RLWE 다항식 차수 | N = 2¹⁰ = 1024 |
-| 상태 차원 n | 4 |
-| 출력 차원 p | 2 (θ, α) |
-| 입력 차원 m | 1 (전압 u) |
-
----
-
 # 02_Aero2 — Encrypted ILC (Quanser Aero2)
 
 Quanser Aero2 2DOF 헬리콥터를 대상으로 한 **암호화 ILC(Iterative Learning Control)** 구현입니다.  
