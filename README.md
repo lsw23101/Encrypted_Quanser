@@ -100,7 +100,7 @@ python swing.py
 
 ---
 
-## 02_Aero2 — Encrypted ILC (Quanser Aero2)
+# 02_Aero2 — Encrypted ILC (Quanser Aero2)
 
 Quanser Aero2 2DOF 헬리콥터를 대상으로 한 **암호화 ILC(Iterative Learning Control)** 구현입니다.  
 반복 시행마다 궤적 추종 오차를 줄이는 Norm-Optimal ILC를 동형암호 위에서 수행합니다.
