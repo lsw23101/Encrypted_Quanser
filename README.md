@@ -1,4 +1,4 @@
-# Encrypted Control on Quanser Qube Servo 3
+# 01_Qube_Servo3
 
 Ring-LWE(RLWE/RGSW) 동형암호를 이용해 Quanser Qube Servo 3(도립진자)를 **암호화된 상태에서 제어**하는 구현입니다.  
 CDSL(Control and Dynamics Systems Lab, SNU)의 암호제어 라이브러리를 기반으로 합니다.
