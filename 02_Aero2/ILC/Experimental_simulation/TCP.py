@@ -51,8 +51,8 @@ TCP_PORT      = 5555
 RECV_TIMEOUT  = 0.040  # 40ms
 
 # ── Reference trajectory (same as ilc.py) ────────────────────────────────
-YAW_MAX_DEG = 200.0
-PIT_AMP_DEG = 30.0
+YAW_MAX_DEG = 100.0
+PIT_AMP_DEG = 15.0  # halved from original 30°
 
 def compute_ref(step_idx):
     t = step_idx * Ts
@@ -146,7 +146,7 @@ def control_loop():
         print(f"[ERROR] {e}")
         return
 
-    myAero2 = Aero2(id=0, hardware=0, readMode=0, frequency=FREQUENCY)
+    myAero2 = Aero2(id=0, hardware=1, readMode=0, frequency=FREQUENCY)
     step = 0
     u_cmd = np.zeros(2)  # last known control (fallback on timeout)
 
