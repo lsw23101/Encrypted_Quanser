@@ -2,7 +2,6 @@
 enc_data/
 
 # ILC sub-directories excluded from repo
-02_Aero2/ILC/Experimental_simulation/
 02_Aero2/ILC/Numerical_simulation/
 
 # ILC iteration state & experiment data (starts fresh after clone)
