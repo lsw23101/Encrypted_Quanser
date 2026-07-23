@@ -79,19 +79,8 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 extern "C" {
 #endif
 
-
-// [변경] 파이썬에서 시스템 차원과 파라미터를 받아옴
-//
 extern __declspec(dllexport) void InitCrypto(int in_n, int in_m, int in_p, double in_s, double in_L, double in_r);
-
-// [변경] 실수 배열 포인터와 길이를 받음 (Generic Encrypt)
-//
 extern __declspec(dllexport) char* EncryptVector(double* valuesPtr, int length, int* sizePtr);
-
-// [변경] 복호화 후 배열 반환 (길이는 전역변수 m 사용 가능하지만, 인자로 받아도 됨)
-// 여기서는 편의상 m(입력차원) 만큼 복호화한다고 가정하거나,
-// DecryptU 처럼 특정 용도라면 m을 사용. 범용성을 위해 요청한 크기(outLen)만큼 반환.
-//
 extern __declspec(dllexport) double* DecryptVector(void* dataPtr, int dataLen, int outLen);
 extern __declspec(dllexport) void FreePtr(void* ptr);
 

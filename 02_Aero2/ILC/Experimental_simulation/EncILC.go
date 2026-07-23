@@ -1,9 +1,13 @@
 //go:build ignore
 
-// EncILC.go — Encrypted ILC Controller (TCP server, port 5555)
+// EncILC_svd.go — Encrypted ILC Controller with SVD-based reduced-space update
 //
-// Performs all homomorphic-encryption control computations for the
-// Quanser Aero2 2-DOF helicopter. Hardware I/O is handled by TCP.py.
+// Differs from EncILC.go in the ILC learning phase:
+//   - ILC state in ciphertext: Theta_j = S^T V_j  (n_r entries, n_r = rank(G_N))
+//   - Reduced gain: K_r = (G_r^T G_r + λI)^{-1} G_r^T  where G_r = G_N @ S
+//   - Update: Theta_{j+1} = Theta_j + K_r @ E_j  (encrypted)
+//   - Reconstruct: V_{j+1} = S @ Theta_{j+1}  (plaintext at plant side)
+// This restricts updates to Range(G_N^T) and avoids null-space accumulation.
 //
 // Binary protocol (little-endian, per step):
 //   client→server: [0x01][y0 y1 r0 r1 : 4×float64] = 33 bytes
@@ -12,7 +16,7 @@
 //   client→server: [0x02]                            =  1 byte
 //   server→client: [rmsP_rad rmsY_rad : 2×float64]  = 16 bytes
 //
-// Startup: go run EncILC.go
+// Startup: go run EncILC_svd.go
 // Then:    python TCP.py
 
 package main
@@ -95,6 +99,17 @@ func matTranspose(A [][]float64) [][]float64 {
 		}
 	}
 	return B
+}
+
+func matVecMul(A [][]float64, x []float64) []float64 {
+	n, m := len(A), len(A[0])
+	y := make([]float64, n)
+	for i := 0; i < n; i++ {
+		for j := 0; j < m; j++ {
+			y[i] += A[i][j] * x[j]
+		}
+	}
+	return y
 }
 
 func solveAXB(A [][]float64, B [][]float64) [][]float64 {
@@ -223,6 +238,52 @@ func zohDisc(Ac, Bc [][]float64, Ts float64) ([][]float64, [][]float64) {
 	return Ad, Bd
 }
 
+// computeS builds an orthonormal basis S (mN x nR) for Range(G_N^T)
+// by running Modified Gram-Schmidt on the rows of G_N.
+func computeS(GN [][]float64, tol float64) ([][]float64, int) {
+	pN, mN := len(GN), len(GN[0])
+	vecs := make([][]float64, pN)
+	for i := 0; i < pN; i++ {
+		vecs[i] = make([]float64, mN)
+		copy(vecs[i], GN[i])
+	}
+	qs := make([][]float64, 0, pN)
+	for i := 0; i < pN; i++ {
+		v := vecs[i]
+		norm := 0.0
+		for k := 0; k < mN; k++ {
+			norm += v[k] * v[k]
+		}
+		norm = math.Sqrt(norm)
+		if norm < tol {
+			continue
+		}
+		q := make([]float64, mN)
+		for k := 0; k < mN; k++ {
+			q[k] = v[k] / norm
+		}
+		qs = append(qs, q)
+		for j := i + 1; j < pN; j++ {
+			dot := 0.0
+			for k := 0; k < mN; k++ {
+				dot += q[k] * vecs[j][k]
+			}
+			for k := 0; k < mN; k++ {
+				vecs[j][k] -= dot * q[k]
+			}
+		}
+	}
+	nR := len(qs)
+	S := make([][]float64, mN)
+	for i := range S {
+		S[i] = make([]float64, nR)
+		for j := 0; j < nR; j++ {
+			S[i][j] = qs[j][i]
+		}
+	}
+	return S, nR
+}
+
 func cloneCtSlice(src []*rlwe.Ciphertext) []*rlwe.Ciphertext {
 	out := make([]*rlwe.Ciphertext, len(src))
 	for i := range src {
@@ -244,11 +305,11 @@ func main() {
 	fmt.Println("N =", params.N(), "  logQ =", params.QBigInt().BitLen())
 
 	// ── Aero2 continuous-time model ────────────────────────────────────────
-	Jp, Jy := 0.0211, 0.0221
-	Dp, Dy := 0.0053, 0.0062
-	Mg := 0.0153
+	Jp, Jy := 0.0219, 0.0220
+	Dp, Dy := 0.00711, 0.0220
+	Mg := 0.0375
 	Kpp, Kpy := 0.0011, 0.0021
-	Kyp, Kyy := -0.0027, 0.0047
+	Kyp, Kyy := -0.0027, 0.0022
 
 	Ac := [][]float64{
 		{0, 0, 1, 0},
@@ -271,38 +332,45 @@ func main() {
 	Ad, Bd := zohDisc(Ac, Bc, Ts)
 
 	// ── Transformed controller matrices (from conversion.m) ────────────────
-	F_ := [][]float64{
-		{-0, -0, 1, -0},
-		{0, 0, -0, 1},
-		{-0, 0, -0, 0},
-		{0, -0, 0, -0},
-	}
-	G_ := [][]float64{
-		{2.0730, 0.4658},
-		{0.0050, 3.6318},
-		{-1.9701, -0.4153},
-		{0.0002, -3.3238},
-	}
-	R_ := [][]float64{
-		{-0.0298, -0.0269},
-		{0.0168, -0.0248},
-		{0.0110, 0.0100},
-		{-0.0062, 0.0092},
-	}
-	H_ := [][]float64{
-		{-28.5768, 24.8825, -0.0000, -0.0000},
-		{-18.4344, -24.0057, -0.0000, 0.0000},
-	}
-	P_ := [][]float64{
-		{4.1572, 1.3674},
-		{0.0960, 7.7492},
-		{-1.6107, -0.5217},
-		{-0.0359, -2.9252},
-	}
-	Nbar := [][]float64{
-		{75.0524, -102.0894},
-		{50.9885, 139.7176},
-	}
+F_ := [][]float64{
+	{-0, -0, 1, 0},
+	{0, -0, -0, 1},
+	{-0, 0, -0, -0},
+	{0, 0, 0, 0},
+}
+
+G_ := [][]float64{
+	{2.2890, 0.1484},
+	{0.0813, 2.8438},
+	{-2.1296, -0.1298},
+	{-0.0608, -2.5498},
+}
+
+R_ := [][]float64{
+	{-0.0031, -0.0060},
+	{0.0091, -0.0063},
+	{0.0009, 0.0017},
+	{-0.0025, 0.0018},
+}
+
+H_ := [][]float64{
+	{-66.0055, 58.7915, 0.0000, 0.0000},
+	{-91.6323, -29.2432, -0.0000, 0.0000},
+}
+
+P_ := [][]float64{
+	{0.7758, 0.0584},
+	{0.0521, 0.9009},
+	{-0.1842, -0.0134},
+	{-0.0120, -0.2049},
+}
+
+Nbar := [][]float64{
+	{50.5860, -54.0145},
+	{76.4911, 34.7706},
+}
+
+
 
 	nState := len(F_) // 4
 	m := len(H_)      // 2
@@ -312,100 +380,8 @@ func main() {
 	pN := p * nSteps
 	mN := m * nSteps
 
-	// ── Quantisation ──────────────────────────────────────────────────────
-	s := 1.0 / 1000.0
-	L := 1.0 / 100000.0
-	r := 1.0 / 1000.0
-	fmt.Printf("Scaling: 1/s=%v  1/r=%v  1/L=%v\n", 1/s, 1/r, 1/L)
-
-	// ── RLWE/RGSW setup ───────────────────────────────────────────────────
-	levelQ := params.QCount() - 1
-	levelP := params.PCount() - 1
-	ringQ := params.RingQ()
-
-	controlDim := math.Max(math.Max(float64(nState), float64(m)), float64(p))
-	tauCtrl := int(math.Pow(2, math.Ceil(math.Log2(controlDim))))
-	ilcDim := math.Max(float64(m*nSteps), float64(p*nSteps))
-	tauILC := int(math.Pow(2, math.Ceil(math.Log2(ilcDim))))
-	fmt.Printf("Packing: tauCtrl=%d  tauILC=%d\n", tauCtrl, tauILC)
-
-	lognCtrl := int(math.Log2(float64(tauCtrl)))
-	lognILC := int(math.Log2(float64(tauILC)))
-
-	galElsCtrl := make([]uint64, lognCtrl)
-	monomialsCtrl := make([]ring.Poly, lognCtrl)
-	for i := 0; i < lognCtrl; i++ {
-		galElsCtrl[i] = uint64(tauCtrl/int(math.Pow(2, float64(i))) + 1)
-		monomialsCtrl[i] = ringQ.NewPoly()
-		idx := params.N() - params.N()/(1<<(i+1))
-		monomialsCtrl[i].Coeffs[0][idx] = 1
-		ringQ.MForm(monomialsCtrl[i], monomialsCtrl[i])
-		ringQ.NTT(monomialsCtrl[i], monomialsCtrl[i])
-	}
-	_ = galElsCtrl
-
-	galSet := make(map[uint64]bool)
-	galEls := make([]uint64, 0, lognCtrl+lognILC)
-	for _, tauNow := range []int{tauCtrl, tauILC} {
-		lognNow := int(math.Log2(float64(tauNow)))
-		for i := 0; i < lognNow; i++ {
-			gal := uint64(tauNow/int(math.Pow(2, float64(i))) + 1)
-			if !galSet[gal] {
-				galSet[gal] = true
-				galEls = append(galEls, gal)
-			}
-		}
-	}
-
-	ilcStateDir := filepath.Join(baseDir, "ilc_state")
-	if err := os.MkdirAll(ilcStateDir, 0755); err != nil {
-		fmt.Println("mkdir error:", err)
-	}
-
-	kgen := rlwe.NewKeyGenerator(params)
-	skPath := filepath.Join(ilcStateDir, "sk.bin")
-	keyLoaded := false
-	sk := kgen.GenSecretKeyNew()
-	if skData, err := os.ReadFile(skPath); err == nil {
-		if err2 := sk.UnmarshalBinary(skData); err2 != nil {
-			fmt.Println("[KEY] WARN: could not parse sk.bin; generating new key:", err2)
-			sk = kgen.GenSecretKeyNew()
-			if out, err3 := sk.MarshalBinary(); err3 == nil {
-				os.WriteFile(skPath, out, 0600)
-			}
-			os.Remove(filepath.Join(ilcStateDir, "v_ilc.bin"))
-		} else {
-			keyLoaded = true
-			fmt.Println("[KEY] Loaded secret key:", skPath)
-		}
-	} else {
-		if out, err2 := sk.MarshalBinary(); err2 == nil {
-			os.WriteFile(skPath, out, 0600)
-			fmt.Println("[KEY] Generated new secret key:", skPath)
-		}
-		os.Remove(filepath.Join(ilcStateDir, "v_ilc.bin"))
-	}
-
-	rlk := kgen.GenRelinearizationKeyNew(sk)
-	evkRGSW := rlwe.NewMemEvaluationKeySet(rlk)
-	evkRLWE := rlwe.NewMemEvaluationKeySet(rlk, kgen.GenGaloisKeysNew(galEls, sk)...)
-	encryptorRLWE := rlwe.NewEncryptor(params, sk)
-	decryptorRLWE := rlwe.NewDecryptor(params, sk)
-	encryptorRGSW := rgsw.NewEncryptor(params, sk)
-	evaluatorRGSW := rgsw.NewEvaluator(params, evkRGSW)
-	evaluatorRLWE := rlwe.NewEvaluator(params, evkRLWE)
-
-	// ── Encrypt controller matrices (offline, once) ────────────────────────
-	fmt.Println("[SETUP] Encrypting controller matrices...")
-	ctF := RGSW.EncPack(F_, tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-	ctG := RGSW.EncPack(utils.ScalMatMult(1/s, G_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-	ctH := RGSW.EncPack(utils.ScalMatMult(1/s, H_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-	ctR := RGSW.EncPack(utils.ScalMatMult(1/s, R_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-	ctNbar := RGSW.EncPack(utils.ScalMatMult(1/s, Nbar), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-	ctP := RGSW.EncPack(utils.ScalMatMult(1/s, P_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
-
-	// ── ILC: compute L_opt ─────────────────────────────────────────────────
-	fmt.Println("[ILC] Computing L_opt...")
+	// ── Build augmented closed-loop system and lifted matrix G_N ──────────
+	fmt.Println("[ILC] Building G_N...")
 	n_x := len(Ad)
 	n_z := len(F_)
 	n_aug := n_x + n_z
@@ -477,54 +453,177 @@ func main() {
 		}
 	}
 
-	ILC_LAMBDA := 0.001
-	GNT := matTranspose(GN)
-	GNT_GN := matMul(GNT, GN)
-	for i := 0; i < mN; i++ {
-		GNT_GN[i][i] += ILC_LAMBDA
-	}
-	Lopt := solveAXB(GNT_GN, GNT)
-
-	GN_Lopt := matMul(GN, Lopt)
-	Phi := make([][]float64, pN)
+	// ── SVD: compute S = orthonormal basis of Range(G_N^T) ────────────────
+	fmt.Println("[ILC] Computing S via Modified Gram-Schmidt on rows of G_N...")
+	maxRowNormSq := 0.0
 	for i := 0; i < pN; i++ {
-		Phi[i] = make([]float64, pN)
-		for j := 0; j < pN; j++ {
-			if i == j {
-				Phi[i][j] = 1.0 - GN_Lopt[i][j]
-			} else {
-				Phi[i][j] = -GN_Lopt[i][j]
+		norm := 0.0
+		for k := 0; k < mN; k++ {
+			norm += GN[i][k] * GN[i][k]
+		}
+		if norm > maxRowNormSq {
+			maxRowNormSq = norm
+		}
+	}
+	svdTol := math.Sqrt(maxRowNormSq) * 1e-10
+	S, nR := computeS(GN, svdTol)
+	fmt.Printf("[ILC] rank(G_N) = n_r = %d  (pN=%d, mN=%d)\n", nR, pN, mN)
+
+	// ── Quantisation ──────────────────────────────────────────────────────
+	s := 1.0 / 1000.0
+	L := 1.0 / 100000.0
+	r := 1.0 / 1000.0
+	fmt.Printf("Scaling: 1/s=%v  1/r=%v  1/L=%v\n", 1/s, 1/r, 1/L)
+
+	// ── RLWE/RGSW setup ───────────────────────────────────────────────────
+	levelQ := params.QCount() - 1
+	levelP := params.PCount() - 1
+	ringQ := params.RingQ()
+
+	controlDim := math.Max(math.Max(float64(nState), float64(m)), float64(p))
+	tauCtrl := int(math.Pow(2, math.Ceil(math.Log2(controlDim))))
+	tauSVD := int(math.Pow(2, math.Ceil(math.Log2(float64(nR)))))
+	fmt.Printf("Packing: tauCtrl=%d  tauSVD=%d\n", tauCtrl, tauSVD)
+
+	lognCtrl := int(math.Log2(float64(tauCtrl)))
+	lognSVD := int(math.Log2(float64(tauSVD)))
+
+	galElsCtrl := make([]uint64, lognCtrl)
+	monomialsCtrl := make([]ring.Poly, lognCtrl)
+	for i := 0; i < lognCtrl; i++ {
+		galElsCtrl[i] = uint64(tauCtrl/int(math.Pow(2, float64(i))) + 1)
+		monomialsCtrl[i] = ringQ.NewPoly()
+		idx := params.N() - params.N()/(1<<(i+1))
+		monomialsCtrl[i].Coeffs[0][idx] = 1
+		ringQ.MForm(monomialsCtrl[i], monomialsCtrl[i])
+		ringQ.NTT(monomialsCtrl[i], monomialsCtrl[i])
+	}
+	_ = galElsCtrl
+
+	galSet := make(map[uint64]bool)
+	galEls := make([]uint64, 0, lognCtrl+lognSVD)
+	for _, tauNow := range []int{tauCtrl, tauSVD} {
+		lognNow := int(math.Log2(float64(tauNow)))
+		for i := 0; i < lognNow; i++ {
+			gal := uint64(tauNow/int(math.Pow(2, float64(i))) + 1)
+			if !galSet[gal] {
+				galSet[gal] = true
+				galEls = append(galEls, gal)
 			}
 		}
 	}
-	PhiT_Phi := matMul(matTranspose(Phi), Phi)
-	rhoBound := math.Sqrt(spectralRadiusSym(PhiT_Phi))
-	fmt.Printf("[ILC] λ=%.3f  ||I-G_N@L_opt||_2=%.6f\n", ILC_LAMBDA, rhoBound)
 
-	// ── Encrypt L_opt (offline, once) ─────────────────────────────────────
-	fmt.Println("[ILC] Encrypting L_opt (offline)...")
-	tSetup := time.Now()
-	ctL := RGSW.EncPack(utils.ScalMatMult(1/s, Lopt), tauILC, encryptorRGSW, levelQ, levelP, ringQ, params)
-	fmt.Printf("[ILC] ctL ready in %v\n", time.Since(tSetup).Round(time.Millisecond))
+	ilcStateDir := filepath.Join(baseDir, "ilc_state")
+	if err := os.MkdirAll(ilcStateDir, 0755); err != nil {
+		fmt.Println("mkdir error:", err)
+	}
 
-	// ── Load ILC state (persistent across trials) ─────────────────────────
-	zeroVBar := make([]int64, mN)
-	VencCt := RLWE.EncPack(zeroVBar, tauILC, 1/L, *encryptorRLWE, ringQ, params)
-	vIlcVec := make([]float64, mN)
-	vPath := filepath.Join(ilcStateDir, "v_ilc.bin")
-	if vData, err := os.ReadFile(vPath); err == nil {
-		loadedV := rlwe.NewCiphertext(params, 1, params.MaxLevel())
-		if err2 := loadedV.UnmarshalBinary(vData); err2 != nil {
-			fmt.Println("[ILC] WARN: could not parse v_ilc.bin; starting from zero:", err2)
-		} else if !keyLoaded {
-			fmt.Println("[ILC] Existing v_ilc.bin has no matching key; starting from zero.")
+	kgen := rlwe.NewKeyGenerator(params)
+	skPath := filepath.Join(ilcStateDir, "sk.bin")
+	keyLoaded := false
+	sk := kgen.GenSecretKeyNew()
+	if skData, err := os.ReadFile(skPath); err == nil {
+		if err2 := sk.UnmarshalBinary(skData); err2 != nil {
+			fmt.Println("[KEY] WARN: could not parse sk.bin; generating new key:", err2)
+			sk = kgen.GenSecretKeyNew()
+			if out, err3 := sk.MarshalBinary(); err3 == nil {
+				os.WriteFile(skPath, out, 0600)
+			}
+			os.Remove(filepath.Join(ilcStateDir, "theta_ilc.bin"))
 		} else {
-			VencCt = loadedV
-			vIlcVec = RLWE.DecUnpack(VencCt, mN, tauILC, *decryptorRLWE, s*r*L, ringQ, params)
-			fmt.Println("[ILC] Loaded v_ilc.bin from previous iteration.")
+			keyLoaded = true
+			fmt.Println("[KEY] Loaded secret key:", skPath)
 		}
 	} else {
-		fmt.Println("[ILC] No v_ilc.bin found — zero feedforward (iteration 0).")
+		if out, err2 := sk.MarshalBinary(); err2 == nil {
+			os.WriteFile(skPath, out, 0600)
+			fmt.Println("[KEY] Generated new secret key:", skPath)
+		}
+		os.Remove(filepath.Join(ilcStateDir, "theta_ilc.bin"))
+	}
+
+	rlk := kgen.GenRelinearizationKeyNew(sk)
+	evkRGSW := rlwe.NewMemEvaluationKeySet(rlk)
+	evkRLWE := rlwe.NewMemEvaluationKeySet(rlk, kgen.GenGaloisKeysNew(galEls, sk)...)
+	encryptorRLWE := rlwe.NewEncryptor(params, sk)
+	decryptorRLWE := rlwe.NewDecryptor(params, sk)
+	encryptorRGSW := rgsw.NewEncryptor(params, sk)
+	evaluatorRGSW := rgsw.NewEvaluator(params, evkRGSW)
+	evaluatorRLWE := rlwe.NewEvaluator(params, evkRLWE)
+
+	// ── Encrypt controller matrices (offline, once) ────────────────────────
+	fmt.Println("[SETUP] Encrypting controller matrices...")
+	ctF := RGSW.EncPack(F_, tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctG := RGSW.EncPack(utils.ScalMatMult(1/s, G_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctH := RGSW.EncPack(utils.ScalMatMult(1/s, H_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctR := RGSW.EncPack(utils.ScalMatMult(1/s, R_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctNbar := RGSW.EncPack(utils.ScalMatMult(1/s, Nbar), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+	ctP := RGSW.EncPack(utils.ScalMatMult(1/s, P_), tauCtrl, encryptorRGSW, levelQ, levelP, ringQ, params)
+
+	// ── ILC: compute reduced gain K_r from G_r = G_N @ S ─────────────────
+	ILC_LAMBDA := 0.005
+
+	// G_r = G_N @ S  (pN × n_r)
+	Gr := matMul(GN, S)
+
+	// K_r = (G_r^T G_r + λI)^{-1} G_r^T  (n_r × pN)
+	GrT := matTranspose(Gr)
+	GrT_Gr := matMul(GrT, Gr)
+	for i := 0; i < nR; i++ {
+		GrT_Gr[i][i] += ILC_LAMBDA
+	}
+	Kr := solveAXB(GrT_Gr, GrT)
+
+	// ── Stability check: A_Theta = I - K_r G_r  and  A_E = I - G_r K_r ──────────
+	Kr_Gr := matMul(Kr, Gr)
+	A_Theta := make([][]float64, nR)
+	for i := 0; i < nR; i++ {
+		A_Theta[i] = make([]float64, nR)
+		for j := 0; j < nR; j++ {
+			if i == j {
+				A_Theta[i][j] = 1.0 - Kr_Gr[i][j]
+			} else {
+				A_Theta[i][j] = -Kr_Gr[i][j]
+			}
+		}
+	}
+	// ρ(A_Theta): largest singular value via power iteration on symmetric A_Theta^T A_Theta
+	AThetaT_ATheta := matMul(matTranspose(A_Theta), A_Theta)
+	rhoTheta := math.Sqrt(spectralRadiusSym(AThetaT_ATheta))
+	// ρ(A_E)|_Range(G_r): by Sylvester's theorem, nonzero eigs of G_r K_r equal
+	// nonzero eigs of K_r G_r, so eigs of A_E on Range(G_r) equal eigs of A_Theta.
+	rhoE := rhoTheta
+	fmt.Printf("[ILC] λ=%.4f  n_r=%d\n", ILC_LAMBDA, nR)
+	fmt.Printf("[Stability] ρ(I - K_r@G_r)             = %.6f  (Schur stable: %v)\n", rhoTheta, rhoTheta < 1.0)
+	fmt.Printf("[Stability] ρ(I - G_r@K_r)|_Range(G_r)  = %.6f  (Schur stable: %v)\n", rhoE, rhoE < 1.0)
+
+	// ── Encrypt K_r (offline, once) ───────────────────────────────────────
+	fmt.Println("[ILC] Encrypting K_r (offline)...")
+	tSetup := time.Now()
+	ctKr := RGSW.EncPack(utils.ScalMatMult(1/s, Kr), tauSVD, encryptorRGSW, levelQ, levelP, ringQ, params)
+	fmt.Printf("[ILC] ctKr ready in %v\n", time.Since(tSetup).Round(time.Millisecond))
+
+	// ── Load ILC state: Theta_j (n_r entries, persistent across trials) ───
+	zeroThetaBar := make([]int64, nR)
+	ThetaEncCt := RLWE.EncPack(zeroThetaBar, tauSVD, 1/L, *encryptorRLWE, ringQ, params)
+	thetaVec := make([]float64, nR)
+	vIlcVec := make([]float64, mN) // V = S @ Theta, plaintext feedforward
+
+	thetaPath := filepath.Join(ilcStateDir, "theta_ilc.bin")
+	if tData, err := os.ReadFile(thetaPath); err == nil {
+		loadedT := rlwe.NewCiphertext(params, 1, params.MaxLevel())
+		if err2 := loadedT.UnmarshalBinary(tData); err2 != nil {
+			fmt.Println("[ILC] WARN: could not parse theta_ilc.bin; starting from zero:", err2)
+		} else if !keyLoaded {
+			fmt.Println("[ILC] Existing theta_ilc.bin has no matching key; starting from zero.")
+		} else {
+			ThetaEncCt = loadedT
+			thetaVec = RLWE.DecUnpack(ThetaEncCt, nR, tauSVD, *decryptorRLWE, s*r*L, ringQ, params)
+			vIlcVec = matVecMul(S, thetaVec) // V = S @ Theta
+			fmt.Println("[ILC] Loaded theta_ilc.bin from previous iteration.")
+		}
+	} else {
+		fmt.Println("[ILC] No theta_ilc.bin found — zero feedforward (iteration 0).")
 	}
 	fmt.Printf("[ILC] Current feedforward: step0=[%.4f, %.4f] V\n", vIlcVec[0], vIlcVec[1])
 
@@ -535,7 +634,7 @@ func main() {
 		return
 	}
 	defer ln.Close()
-	fmt.Println("\n=== EncILC server ready on :5555 ===")
+	fmt.Println("\n=== EncILC-SVD server ready on :5555 ===")
 	fmt.Println("Waiting for TCP.py to connect...")
 
 	iterNum := 0
@@ -610,25 +709,19 @@ func main() {
 			ringQ.Add(uCtPack.Value[0], NbarRCt.Value[0], uCtPack.Value[0])
 			ringQ.Add(uCtPack.Value[1], NbarRCt.Value[1], uCtPack.Value[1])
 
-			// Decrypt u, add plaintext ILC feedforward
+			// Decrypt u, add plaintext ILC feedforward V = S @ Theta
 			u := RLWE.DecUnpack(uCtPack, m, tauCtrl, *decryptorRLWE, r*s*s*L, ringQ, params)
 			u[0] += vIlcVec[2*step]
 			u[1] += vIlcVec[2*step+1]
 
-			// Re-encrypt u (before clipping) for encrypted state update
+			// Re-encrypt u for encrypted state update. No clipping here: the
+			// reference/gains are designed so u never needs it, and the
+			// hardware-side driver (write_voltage) enforces its own safety
+			// limit independently — this stays a single value used both for
+			// hardware output and the observer state update.
 			uReEnc := RLWE.Enc(
 				utils.RoundVec(utils.ScalVecMult(1/r, u)),
 				1/L, *encryptorRLWE, ringQ, params)
-
-			// Clip u for hardware output
-			for i := range u {
-				if u[i] > 20 {
-					u[i] = 20
-				}
-				if u[i] < -20 {
-					u[i] = -20
-				}
-			}
 
 			// Encrypted observer state update: z = F×z + G×y + R×u + P×r
 			FzCt := RGSW.MultPack(zCt, ctF, evaluatorRGSW, ringQ, params)
@@ -664,8 +757,9 @@ func main() {
 			rScalarStore[t] = cloneCtSlice(zeroCt)
 		}
 
-		// ── Encrypted ILC update: V += L_opt × (R - Y) ────────────────────
-		fmt.Println("[ILC] Computing encrypted ILC update...")
+		// ── Encrypted ILC update: Theta += K_r × (R - Y) ─────────────────
+		// E_j stacked as pN scalar ciphertexts (same as before)
+		fmt.Println("[ILC] Computing encrypted ILC update (SVD reduced space)...")
 		tILC := time.Now()
 
 		ctE := make([]*rlwe.Ciphertext, pN)
@@ -678,19 +772,21 @@ func main() {
 			}
 		}
 
-		dUCt := RGSW.MultPack(ctE, ctL, evaluatorRGSW, ringQ, params)
-		ringQ.Add(VencCt.Value[0], dUCt.Value[0], VencCt.Value[0])
-		ringQ.Add(VencCt.Value[1], dUCt.Value[1], VencCt.Value[1])
+		// dTheta = K_r × E  (packed, n_r entries in tauSVD slots)
+		dThetaCt := RGSW.MultPack(ctE, ctKr, evaluatorRGSW, ringQ, params)
+		ringQ.Add(ThetaEncCt.Value[0], dThetaCt.Value[0], ThetaEncCt.Value[0])
+		ringQ.Add(ThetaEncCt.Value[1], dThetaCt.Value[1], ThetaEncCt.Value[1])
 		fmt.Printf("[ILC] Update done in %v\n", time.Since(tILC).Round(time.Millisecond))
 
-		// Save updated ILC state
-		if vData, err := VencCt.MarshalBinary(); err == nil {
-			os.WriteFile(vPath, vData, 0644)
-			fmt.Println("[ILC] Saved v_ilc.bin →", vPath)
+		// Save updated Theta ciphertext
+		if tData, err := ThetaEncCt.MarshalBinary(); err == nil {
+			os.WriteFile(thetaPath, tData, 0644)
+			fmt.Println("[ILC] Saved theta_ilc.bin →", thetaPath)
 		}
 
-		// Decrypt updated feedforward for next trial
-		vIlcVec = RLWE.DecUnpack(VencCt, mN, tauILC, *decryptorRLWE, s*r*L, ringQ, params)
+		// Decrypt Theta and reconstruct V = S @ Theta  (plaintext)
+		thetaVec = RLWE.DecUnpack(ThetaEncCt, nR, tauSVD, *decryptorRLWE, s*r*L, ringQ, params)
+		vIlcVec = matVecMul(S, thetaVec)
 		fmt.Printf("[ILC] Next feedforward: step0=[%.4f, %.4f] V\n", vIlcVec[0], vIlcVec[1])
 
 		// Compute plaintext error statistics from logged data

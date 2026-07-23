@@ -44,7 +44,7 @@ func InitCrypto(in_n, in_m, in_p C.int, in_s, in_L, in_r C.double) {
 	// Set same params as offline.go and controller.go
 	var err error
 	params, err = rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
-		LogN: 12, LogQ: []int{60}, LogP: []int{60}, NTTFlag: true,
+		LogN: 12, LogQ: []int{56}, LogP: []int{51}, NTTFlag: true,
 	})
 	if err != nil {
 		panic(err)

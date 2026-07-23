@@ -21,8 +21,8 @@ func main() {
 	// RLWE params
 	params, _ := rlwe.NewParametersFromLiteral(rlwe.ParametersLiteral{
 		LogN:    12,
-		LogQ:    []int{60},
-		LogP:    []int{60},
+		LogQ:    []int{56},
+		LogP:    []int{51},
 		NTTFlag: true,
 	})
 

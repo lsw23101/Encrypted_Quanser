@@ -50,21 +50,39 @@ TCP_PORT      = 5555
 # Go's encrypted step should complete in <40ms on typical hardware.
 RECV_TIMEOUT  = 0.040  # 40ms
 
-# ── Reference trajectory (same as ilc.py) ────────────────────────────────
-YAW_MAX_DEG = 100.0
-PIT_AMP_DEG = 15.0  # halved from original 30°
+# ── Reference trajectory (smooth rise / hold / return / hold) ────────────
+# Rise 0->target and return target->0 both use a "smootherstep" quintic
+# ease (6*tau^5 - 15*tau^4 + 10*tau^3), which has zero 1st AND 2nd
+# derivative at tau=0 and tau=1. That makes velocity continuous across
+# every segment boundary (hold segments already have zero velocity), and
+# pitch/yaw start and end each trial at exactly (0, 0) with zero rate —
+# required so repeated ILC iterations share identical initial/final
+# conditions.
+PIT_AMP_DEG   = 10.0
+YAW_MAX_DEG   = 30.0
+T_RISE_END    = 3.0   # 0s -> 3.0s   : rise to target attitude
+T_HOLD1_END   = 5.0   # 3.0s -> 5.0s : hold target attitude
+T_RETURN_END  = 8.0   # 5.0s -> 8.0s : return to zero
+# 8.0s -> TRAJ_TIME (10.0s)          : hold zero attitude
+
+def _smootherstep(tau):
+    tau = np.clip(tau, 0.0, 1.0)
+    return 6 * tau**5 - 15 * tau**4 + 10 * tau**3
 
 def compute_ref(step_idx):
     t = step_idx * Ts
     if t >= TRAJ_TIME:
         return np.array([0.0, 0.0])
-    tau = t / TRAJ_TIME
-    window = np.sin(np.pi * tau) ** 3
-    dynamic_pitch = np.sin(2 * np.pi * 0.1 * t) - 0.5 * np.cos(2 * np.pi * 0.2 * t)
-    pitch = np.deg2rad(PIT_AMP_DEG) * window * dynamic_pitch
-    base_yaw = np.sin(np.pi * tau)
-    yaw_perturbation = 0.15 * np.sin(2 * np.pi * 0.15 * t)
-    yaw = np.deg2rad(YAW_MAX_DEG) * window * (base_yaw + yaw_perturbation)
+    if t < T_RISE_END:
+        s = _smootherstep(t / T_RISE_END)
+    elif t < T_HOLD1_END:
+        s = 1.0
+    elif t < T_RETURN_END:
+        s = 1.0 - _smootherstep((t - T_HOLD1_END) / (T_RETURN_END - T_HOLD1_END))
+    else:
+        s = 0.0
+    pitch = np.deg2rad(PIT_AMP_DEG) * s
+    yaw = np.deg2rad(YAW_MAX_DEG) * s
     return np.array([pitch, yaw])
 
 # ── Data setup ────────────────────────────────────────────────────────────

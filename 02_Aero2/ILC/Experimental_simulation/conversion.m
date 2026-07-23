@@ -34,8 +34,8 @@ B = sysD.B;
 [l, ~] = size(C);
 
 % (1) LQR Feedback Gain (K)
-Q = diag([1000, 5000, 1, 5]); % Penalize angle errors heavily
-R = 0.1*eye(2);               % Minimal penalty on voltage
+Q = diag([1000, 500, 1, 1]); % Penalize angle errors heavily
+R = 0.1 * eye(2);               % Minimal penalty on voltage
 [K, ~, ~] = dlqr(A, B, Q, R);
 
 % (2) Feedforward Precompensator (N_bar) for Tracking
@@ -44,7 +44,7 @@ R = 0.1*eye(2);               % Minimal penalty on voltage
 N_bar = inv(C * inv(eye(4) - (A - B * K)) * B);
 
 % (3) Luenberger Observer Gain (L)
-obs_poles = [0.75, 0.76, 0.77, 0.78]; % Faster than system dynamics
+obs_poles = [0.45, 0.46, 0.47, 0.48]; % Faster than system dynamics
 L = place(A', C', obs_poles).';
 
 %% 4. Observer-Based Controller Matrices (Tracking)
@@ -129,13 +129,13 @@ fprintf('G_ =\n'); disp(G_);
 fprintf('H_ =\n'); disp(H_);
 fprintf('P_ =\n'); disp(P_);
 
-fprintf('\n=== Python (Transformed) ===\n');
+fprintf('\n=== Go (Transformed) ===\n');
 print_go('F_', round(F_), 0);
 print_go('G_', G_, 4);
 print_go('R_', R_, 4);
 print_go('H_', H_, 4);
 print_go('P_', P_, 4);
-print_go('N_bar', N_bar, 4);
+print_go('Nbar', N_bar, 4);
 
 %% 6. Simulation (Square-wave reference)
 REF_HALF_PERIOD = 10;    % seconds per half-cycle (sign flip interval)
