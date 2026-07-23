@@ -32,7 +32,10 @@
       "WebFetch(domain:www2.ece.ohio-state.edu)",
       "WebFetch(domain:www.quanser.com)",
       "WebFetch(domain:www.ri.cmu.edu)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(git config *)"
     ]
   }
 }
