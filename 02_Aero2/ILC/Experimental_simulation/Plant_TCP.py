@@ -38,10 +38,10 @@ signal.signal(signal.SIGINT, sig_handler)
 # ── Constants ─────────────────────────────────────────────────────────────
 FREQUENCY     = 20
 Ts            = 1.0 / FREQUENCY
-TRAJ_TIME     = 10.0
-RUN_TIME      = 11.0
-N_STEPS       = int(TRAJ_TIME * FREQUENCY)    # 200 steps (active control)
-N_TOTAL_STEPS = int(RUN_TIME * FREQUENCY)     # 220 steps (incl. cool-down)
+TRAJ_TIME     = 20.0
+RUN_TIME      = 21.0
+N_STEPS       = int(TRAJ_TIME * FREQUENCY)    # 400 steps (active control)
+N_TOTAL_STEPS = int(RUN_TIME * FREQUENCY)     # 420 steps (incl. cool-down)
 VMAX          = 20.0
 PITCH_LIMIT   = np.deg2rad(40)
 TCP_HOST      = 'localhost'
@@ -50,40 +50,71 @@ TCP_PORT      = 5555
 # Go's encrypted step should complete in <40ms on typical hardware.
 RECV_TIMEOUT  = 0.040  # 40ms
 
-# ── Reference trajectory (smooth rise / hold / return / hold) ────────────
-# Rise 0->target and return target->0 both use a "smootherstep" quintic
-# ease (6*tau^5 - 15*tau^4 + 10*tau^3), which has zero 1st AND 2nd
-# derivative at tau=0 and tau=1. That makes velocity continuous across
-# every segment boundary (hold segments already have zero velocity), and
-# pitch/yaw start and end each trial at exactly (0, 0) with zero rate —
-# required so repeated ILC iterations share identical initial/final
-# conditions.
-PIT_AMP_DEG   = 10.0
-YAW_MAX_DEG   = 30.0
-T_RISE_END    = 3.0   # 0s -> 3.0s   : rise to target attitude
-T_HOLD1_END   = 5.0   # 3.0s -> 5.0s : hold target attitude
-T_RETURN_END  = 8.0   # 5.0s -> 8.0s : return to zero
-# 8.0s -> TRAJ_TIME (10.0s)          : hold zero attitude
+# ── Reference trajectory ──────────────────────────────────────────────────
+# Shape over the 20s trial:
+#   Pitch: linear ramp 0 -> PIT_LEVELS[0] over PIT_RAMP_OUTER seconds, hold,
+#          then a smootherstep staircase through PIT_LEVELS[1:] (each
+#          transition a PIT_RAMP_INNER-second ramp followed by a PIT_HOLD
+#          plateau), then a mirrored linear ramp PIT_LEVELS[-1] -> 0 over
+#          the last PIT_RAMP_OUTER seconds — pitch starts and ends the
+#          trial at exactly 0° (required for repeatable ILC iterations).
+#   Yaw:   0 for the first/last YAW_MARGIN seconds, then one full sine
+#          cycle (0 -> +YAW_MAX_DEG -> 0 -> -YAW_MAX_DEG -> 0) in between.
+#          A plain sine has nonzero slope where it meets the flat margin,
+#          so there's a small velocity kink there too.
+PIT_LEVELS     = [10.0, 20.0, 15.0, 20.0, 10.0]  # deg — staircase plateaus
+PIT_RAMP_OUTER = 2.5    # s — linear ramp to/from 0 at the very start/end
+PIT_RAMP_INNER = 1.5    # s — smootherstep ramp between consecutive levels
+PIT_HOLD       = 1.8    # s — hold duration at each plateau
+YAW_MAX_DEG    = 90.0
+YAW_MARGIN     = 1.0    # s of zero hold at the start and end
+
+# 2*PIT_RAMP_OUTER + len(PIT_LEVELS)*PIT_HOLD + (len(PIT_LEVELS)-1)*PIT_RAMP_INNER
+# must equal TRAJ_TIME; with the defaults above that's 5 + 9 + 6 = 20.
+def _build_pitch_segments():
+    segs = []
+    t0 = 0.0
+    t1 = t0 + PIT_RAMP_OUTER
+    segs.append((t0, t1, 'linear', 0.0, PIT_LEVELS[0])); t0 = t1
+    t1 = t0 + PIT_HOLD
+    segs.append((t0, t1, 'hold', PIT_LEVELS[0], PIT_LEVELS[0])); t0 = t1
+    for v0, v1 in zip(PIT_LEVELS, PIT_LEVELS[1:]):
+        t1 = t0 + PIT_RAMP_INNER
+        segs.append((t0, t1, 'smooth', v0, v1)); t0 = t1
+        t1 = t0 + PIT_HOLD
+        segs.append((t0, t1, 'hold', v1, v1)); t0 = t1
+    t1 = t0 + PIT_RAMP_OUTER
+    segs.append((t0, t1, 'linear', PIT_LEVELS[-1], 0.0)); t0 = t1
+    return segs
+
+_PIT_SEGMENTS = _build_pitch_segments()
 
 def _smootherstep(tau):
     tau = np.clip(tau, 0.0, 1.0)
     return 6 * tau**5 - 15 * tau**4 + 10 * tau**3
 
+def _pitch_deg(t):
+    for t0, t1, kind, v0, v1 in _PIT_SEGMENTS:
+        if t < t1:
+            if kind == 'hold':
+                return v0
+            frac = (t - t0) / (t1 - t0)
+            if kind == 'linear':
+                return v0 + (v1 - v0) * frac
+            return v0 + (v1 - v0) * _smootherstep(frac)
+    return 0.0
+
+def _yaw_deg(t):
+    if t < YAW_MARGIN or t > TRAJ_TIME - YAW_MARGIN:
+        return 0.0
+    tau = (t - YAW_MARGIN) / (TRAJ_TIME - 2 * YAW_MARGIN)
+    return YAW_MAX_DEG * np.sin(2 * np.pi * tau)
+
 def compute_ref(step_idx):
     t = step_idx * Ts
     if t >= TRAJ_TIME:
         return np.array([0.0, 0.0])
-    if t < T_RISE_END:
-        s = _smootherstep(t / T_RISE_END)
-    elif t < T_HOLD1_END:
-        s = 1.0
-    elif t < T_RETURN_END:
-        s = 1.0 - _smootherstep((t - T_HOLD1_END) / (T_RETURN_END - T_HOLD1_END))
-    else:
-        s = 0.0
-    pitch = np.deg2rad(PIT_AMP_DEG) * s
-    yaw = np.deg2rad(YAW_MAX_DEG) * s
-    return np.array([pitch, yaw])
+    return np.array([np.deg2rad(_pitch_deg(t)), np.deg2rad(_yaw_deg(t))])
 
 # ── Data setup ────────────────────────────────────────────────────────────
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')

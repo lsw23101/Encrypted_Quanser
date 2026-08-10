@@ -1,9 +1,7 @@
 """result.py — Plot ILC learning progress from data/ folder.
 
-Layout (3 rows × 2 cols):
-  Row 1: Output trajectories  [ref / all iterations, faded / k_first / k_last]
-  Row 2: Tracking errors      [all iterations, faded / k_first / k_last]
-  Row 3: Control inputs       [all iterations, faded / k_first / k_last]
+Layout (1 row × 2 cols):
+  Pitch / Yaw output trajectories  [ref / all iterations, faded / k_first / k_last]
 
 Intermediate iterations are drawn low-alpha with a color gradient (red→blue,
 first→last) so the learning trend is visible without cluttering the plot;
@@ -84,25 +82,25 @@ def plot_mid(ax, col, field):
                 color=CMAP_MID(norm(int(d['k']))), alpha=MID_ALPHA, lw=MID_LW, zorder=2)
 
 # ── Figure ────────────────────────────────────────────────────────────────
-fig, axes = plt.subplots(3, 2, figsize=(8.3, 8.0))
+fig, axes = plt.subplots(1, 2, figsize=(8.3, 3.2))
 fig.subplots_adjust(
     left=0.10, right=0.90,
-    bottom=0.07, top=0.96,
-    hspace=0.45, wspace=0.35,
+    bottom=0.16, top=0.90,
+    wspace=0.35,
 )
 
-cbar_ax = fig.add_axes([0.93, 0.07, 0.02, 0.89])
+cbar_ax = fig.add_axes([0.93, 0.16, 0.02, 0.74])
 sm = ScalarMappable(cmap=CMAP_MID, norm=norm)
 sm.set_array([])
 cbar = fig.colorbar(sm, cax=cbar_ax)
 cbar.set_label('ILC iteration $k$ (intermediate trials)')
 
-# ─── Row 1: Output trajectories ───────────────────────────────────────────
+# ─── Output trajectories (pitch / yaw) ────────────────────────────────────
 out_ylabels = [r'Pitch $\theta_p$ (deg)', r'Yaw $\theta_y$ (deg)']
 out_titles  = ['(a) Pitch Output', '(b) Yaw Output']
 
 for col in range(2):
-    ax = axes[0, col]
+    ax = axes[col]
     plot_mid(ax, col, 'Y')
     ax.plot(t1, np.rad2deg(d1['R'][:N1, col]),
             color=C_REF, ls=LS_REF, lw=1.2, label='Reference', zorder=4)
@@ -112,44 +110,9 @@ for col in range(2):
             color=C_LAST,  label=f'$k = {kl}$', zorder=3)
     ax.set_title(out_titles[col], loc='left', pad=4)
     ax.set_ylabel(out_ylabels[col])
-    ax.set_xlim([0, t_max])
-    ax.legend(loc='upper right', ncol=1)
-    ax.grid(True)
-
-# ─── Row 2: Tracking errors ───────────────────────────────────────────────
-err_ylabels = [r'Pitch Error $e_p$ (deg)', r'Yaw Error $e_y$ (deg)']
-err_titles  = ['(c) Pitch Error', '(d) Yaw Error']
-
-for col in range(2):
-    ax = axes[1, col]
-    ax.axhline(0, color='k', lw=0.7, ls='-', zorder=1)
-    plot_mid(ax, col, 'E')
-    ax.plot(t1, np.rad2deg(d1['E'][:N1, col]),
-            color=C_FIRST, label=f'$k = {k1}$', zorder=3)
-    ax.plot(tl, np.rad2deg(dl['E'][:Nl, col]),
-            color=C_LAST,  label=f'$k = {kl}$', zorder=3)
-    ax.set_title(err_titles[col], loc='left', pad=4)
-    ax.set_ylabel(err_ylabels[col])
-    ax.set_xlim([0, t_max])
-    ax.legend(loc='upper right')
-    ax.grid(True)
-
-# ─── Row 3: Control inputs ────────────────────────────────────────────────
-inp_ylabels = [r'$V_\mathrm{main}$ (V)', r'$V_\mathrm{tail}$ (V)']
-inp_titles  = ['(e) Main Motor Voltage', '(f) Tail Motor Voltage']
-
-for col in range(2):
-    ax = axes[2, col]
-    plot_mid(ax, col, 'U')
-    ax.plot(t1, d1['U'][:N1, col],
-            color=C_FIRST, label=f'$k = {k1}$', zorder=3)
-    ax.plot(tl, dl['U'][:Nl, col],
-            color=C_LAST,  label=f'$k = {kl}$', zorder=3)
-    ax.set_title(inp_titles[col], loc='left', pad=4)
-    ax.set_ylabel(inp_ylabels[col])
     ax.set_xlabel('Time (s)')
     ax.set_xlim([0, t_max])
-    ax.legend(loc='upper right')
+    ax.legend(loc='upper right', ncol=1)
     ax.grid(True)
 
 # ── Save as PDF (vector) ──────────────────────────────────────────────────

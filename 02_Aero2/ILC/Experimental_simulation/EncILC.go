@@ -376,7 +376,7 @@ Nbar := [][]float64{
 	m := len(H_)      // 2
 	p := len(C)       // 2
 
-	nSteps := 200 // 10s × 20Hz
+	nSteps := 400 // 20s × 20Hz
 	pN := p * nSteps
 	mN := m * nSteps
 
@@ -563,16 +563,39 @@ Nbar := [][]float64{
 	// ── ILC: compute reduced gain K_r from G_r = G_N @ S ─────────────────
 	ILC_LAMBDA := 0.005
 
+	// Error weighting: emphasise pitch tracking over yaw in the ILC cost.
+	// The lifted error is stacked as [e_p(0), e_y(0), e_p(1), e_y(1), ...],
+	// so W = diag(wVec) with a larger pitch weight makes the norm-optimal
+	// update drive pitch error down harder at the expense of yaw.
+	//   Tune W_PITCH / W_YAW: higher ratio → more pitch emphasis.
+	W_PITCH := 5.0
+	W_YAW := 1.0
+	wVec := make([]float64, pN)
+	for t := 0; t < nSteps; t++ {
+		wVec[p*t+0] = W_PITCH
+		wVec[p*t+1] = W_YAW
+	}
+	fmt.Printf("[ILC] Error weighting: W_pitch=%.2f  W_yaw=%.2f\n", W_PITCH, W_YAW)
+
 	// G_r = G_N @ S  (pN × n_r)
 	Gr := matMul(GN, S)
 
-	// K_r = (G_r^T G_r + λI)^{-1} G_r^T  (n_r × pN)
-	GrT := matTranspose(Gr)
-	GrT_Gr := matMul(GrT, Gr)
+	// Weighted norm-optimal gain:
+	//   K_r = (G_r^T W G_r + λI)^{-1} G_r^T W   (n_r × pN)
+	// W is diagonal, so G_r^T W is just a column-wise scaling of G_r^T.
+	GrT := matTranspose(Gr) // n_r × pN
+	GrTW := make([][]float64, nR)
+	for i := 0; i < nR; i++ {
+		GrTW[i] = make([]float64, pN)
+		for c := 0; c < pN; c++ {
+			GrTW[i][c] = GrT[i][c] * wVec[c]
+		}
+	}
+	GrT_Gr := matMul(GrTW, Gr) // G_r^T W G_r  (n_r × n_r)
 	for i := 0; i < nR; i++ {
 		GrT_Gr[i][i] += ILC_LAMBDA
 	}
-	Kr := solveAXB(GrT_Gr, GrT)
+	Kr := solveAXB(GrT_Gr, GrTW)
 
 	// ── Stability check: A_Theta = I - K_r G_r  and  A_E = I - G_r K_r ──────────
 	Kr_Gr := matMul(Kr, Gr)
